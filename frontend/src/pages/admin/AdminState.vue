@@ -1,0 +1,1 @@
+<template><div v-if="loading" class="admin-state" role="status">正在读取真实数据…</div><div v-else-if="error" class="admin-state error" role="alert">{{ error }}<button type="button" @click="$emit('retry')">重试</button></div></template><script setup lang="ts">defineProps<{loading:boolean;error?:string}>();defineEmits<{retry:[]}>();</script>

@@ -1,0 +1,40 @@
+# IDE and local agent workspaces
+.idea/
+.vscode/
+.superpowers/
+
+# Frontend dependencies and generated files
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+frontend/build-output.txt
+frontend/playwright-report/
+frontend/test-results/
+
+# Backend build output and runtime data
+backend/target/
+backend/uploads/
+
+# Desktop and workspace build output
+desktop/dist/
+desktop/dist-tests/
+desktop/release/
+.artifacts/
+node_modules/
+
+# Local services and databases
+Redis-x64-3.0.504/
+*.rdb
+*.aof
+
+# Secrets and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

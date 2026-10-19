@@ -1,0 +1,22 @@
+[Unit]
+Description=StudyRoom Spring Boot API
+After=network-online.target mysqld.service redis.service
+Wants=network-online.target
+Requires=mysqld.service redis.service
+
+[Service]
+Type=simple
+User=studyroom
+Group=studyroom
+WorkingDirectory=/opt/study-room/backend
+EnvironmentFile=/etc/study-room/study-room.env
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -XX:+UseG1GC -jar /opt/study-room/app/study-room-backend.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

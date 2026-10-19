@@ -1,0 +1,22 @@
+import {test,expect} from '@playwright/test';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+for(const width of [1440,390])test(`download release notes and login boundary ${width}`,async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewportSize({width,height:width===390?844:900});
+ await page.route('**/api/**',r=>r.fulfill({json:{success:true,data:null}}));
+ await page.route('**/api/download/status',r=>r.fulfill({json:{access:'login-required',release:{version:'0.2.0-trial.20261015.1',size:166480882,sha256:'a'.repeat(64),filename:'MoYu-Setup-0.2.0-trial.20261015.1-win-x64.exe'}}}));
+ await page.goto('/download');
+ await expect(page.getByRole('heading',{name:'更新日志',exact:true})).toBeVisible();
+ await expect(page.locator('#release-notes')).toContainText('当前下载版本');
+ await expect(page.locator('.release-entry').first()).toContainText('固定下载页');
+ await expect(page.locator('.release-entry').nth(1)).toContainText('约 3.2 秒');
+ await page.locator('.release-entry details summary').first().click();
+ await expect(page.locator('.release-entry').nth(2)).toContainText('新增在线／摸鱼时间账本');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('#release-notes').scrollIntoViewIfNeeded();
+ await page.screenshot({path:join(tmpdir(),`moyu-download-notes-${width}.png`),fullPage:true});
+ await page.getByRole('link',{name:'登录墨屿后下载'}).click();
+ await expect(page).toHaveURL(/login\?redirect=\/download/);
+ expect(errors).toEqual([]);
+});

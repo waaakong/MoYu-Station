@@ -1,0 +1,42 @@
+.sr-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.sr-focus-ring:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--sr-color-focus);
+  outline-offset: 3px;
+}
+
+.sr-surface {
+  border: 1px solid var(--sr-color-line);
+  background: var(--sr-color-surface);
+  box-shadow: var(--sr-shadow-raised);
+  backdrop-filter: blur(16px) saturate(115%);
+}
+
+.sr-reduced-transparency :is(.sr-surface,.glass,.app-nav,.player,.scene-panel,.time-panel,.chat-shell,.feed-list,.account-panel,.context-drawer,.el-dialog,.el-message-box,.el-popper) {
+  background: var(--sr-color-surface-solid) !important;
+  backdrop-filter: none !important;
+}
+.sr-reduced-transparency :is(dialog,.modal-layer,.image-viewer)::backdrop { backdrop-filter:none !important; }
+.sr-reduced-transparency dialog:not(.sr-overlay-dialog) { background-color: var(--sr-color-surface-solid); }
+
+.sr-low-performance *,
+.sr-low-performance *::before,
+.sr-low-performance *::after {
+  backdrop-filter: none !important;
+  filter: none !important;
+}

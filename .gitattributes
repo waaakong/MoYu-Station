@@ -1,0 +1,2 @@
+# Linux deployment scripts must retain executable shebangs after Windows checkout.
+*.sh text eol=lf

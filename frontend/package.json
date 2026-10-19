@@ -1,0 +1,45 @@
+{
+  "name": "study-room-frontend",
+  "version": "0.1.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "check:audio-assets": "node scripts/check-audio-assets.mjs",
+    "build:scenes": "node scripts/build-scenes.mjs",
+    "check:scene-assets": "node scripts/check-scene-assets.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:functional": "playwright test --grep-invert visual.baseline",
+    "test:e2e:visual": "playwright test e2e/scene-focus-visual.spec.ts e2e/entertainment-visual.spec.ts e2e/identity-visual.spec.ts",
+    "build": "vite build",
+    "build:web": "vite build --mode web-production",
+    "build:desktop-candidate": "vite build --mode desktop-candidate",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@studyroom/contracts": "*",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "axios": "1.18.0",
+    "element-plus": "^2.10.7",
+    "gsap": "3.15.0",
+    "pinia": "^2.3.0",
+    "three": "^0.171.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.2",
+    "sharp": "0.35.4",
+    "typescript": "5.9.3",
+    "vite": "^6.0.5",
+    "vitest": "5.0.0",
+    "vue-tsc": "3.3.11"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.61.1"
+  }
+}

@@ -1,0 +1,54 @@
+/* Explicit opt-in material: no global blur on every nested card or control. */
+.sr-glass {
+  background: var(--sr-material-sheen), var(--sr-glass-fill, var(--sr-material-regular)) !important;
+  border-color: var(--sr-material-edge) !important;
+  box-shadow: var(--sr-material-shadow) !important;
+  -webkit-backdrop-filter: var(--sr-material-filter) !important;
+  backdrop-filter: var(--sr-material-filter) !important;
+}
+.sr-glass--reading { --sr-glass-fill: var(--sr-material-reading); }
+.sr-glass--floating { --sr-glass-fill: var(--sr-material-floating); }
+
+/* Controls sit inside a material. Highlight them without adding another blur. */
+.sr-glass-control {
+  background: linear-gradient(160deg, rgba(255,255,255,.12), rgba(240,241,237,.04)) !important;
+  border-color: rgba(240,241,237,.22) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 8px rgba(6,14,26,.12) !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sr-glass { background: var(--sr-color-surface-solid) !important; }
+}
+
+/* These selectors also cover dialog/Teleport content outside the app shell. */
+.sr-reduced-transparency .sr-glass,
+.sr-low-performance .sr-glass {
+  background: var(--sr-color-surface-solid) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+.sr-reduced-transparency .sr-glass-control,
+.sr-low-performance .sr-glass-control {
+  background: var(--sr-color-selected) !important;
+  box-shadow: none !important;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .sr-glass {
+    background: var(--sr-color-surface-solid) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border-color: #d2d5d0 !important;
+  }
+  .sr-glass-control { background: var(--sr-color-selected) !important; box-shadow: none !important; }
+}
+@media (forced-colors: active) {
+  .sr-glass, .sr-glass-control {
+    background: Canvas !important;
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

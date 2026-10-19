@@ -1,0 +1,41 @@
+[Unit]
+Description=StudyRoom V2 Spring Boot API
+After=network-online.target mysqld.service studyroom-v2-redis.service
+Wants=network-online.target
+Requires=mysqld.service studyroom-v2-redis.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=studyroom-v2
+Group=studyroom-v2
+WorkingDirectory=/srv/studyroom-v2/current/backend
+EnvironmentFile=/etc/studyroom-v2/studyroom-v2.env
+ExecStart=/usr/bin/java -Xms256m -Xmx384m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -Xss512k -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.io.tmpdir=/var/lib/studyroom-v2/tmp -jar /srv/studyroom-v2/current/backend/study-room.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=90
+TimeoutStopSec=30
+KillSignal=SIGTERM
+MemoryHigh=400M
+MemoryMax=448M
+TasksMax=256
+LimitNOFILE=16384
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/studyroom-v2/uploads /var/lib/studyroom-v2/tmp
+
+[Install]
+WantedBy=multi-user.target

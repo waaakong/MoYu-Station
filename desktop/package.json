@@ -1,0 +1,94 @@
+{
+  "name": "study-room-desktop",
+  "version": "0.2.0-trial.20261015.3",
+  "description": "MoYu Station local-first immersive focus client",
+  "author": "MoYu Station",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/index.cjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:provider-faults": "node scripts/test-provider-faults.mjs",
+    "test:update-network": "node scripts/test-update-network.mjs",
+    "test": "vitest run --config vitest.config.ts && node scripts/test-electron.mjs",
+    "build": "node scripts/build.mjs",
+    "package": "npm run build && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never",
+    "package:dir": "npm run build && electron-builder --config electron-builder.config.cjs --dir --x64 --publish never",
+    "start": "npm run build && electron .",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke:packaged": "node scripts/smoke.mjs --packaged"
+  },
+  "dependencies": {
+    "@studyroom/contracts": "*",
+    "electron-updater": "6.8.9",
+    "music-metadata": "^11.15.0",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  },
+  "build": {
+    "appId": "xyz.moyustation.studyroom",
+    "productName": "墨屿自习室 · MoYu Station",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../LICENSE",
+        "to": "licenses/MoYu-MIT-LICENSE.txt"
+      },
+      {
+        "from": "../THIRD_PARTY_NOTICES.md",
+        "to": "licenses/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "../frontend/src/assets/audio/ambient/LICENSES.md",
+        "to": "licenses/ambient-audio-LICENSES.md"
+      }
+    ],
+    "win": {
+      "icon": "resources/brand/app.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "artifactName": "MoYu-Setup-${version}-win-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://moyustation.xyz/private-updates/releases/stable/0.1.0/"
+      }
+    ],
+    "nsis": {
+      "installerIcon": "resources/brand/app.ico",
+      "uninstallerIcon": "resources/brand/app.ico",
+      "installerHeaderIcon": "resources/brand/app.ico",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

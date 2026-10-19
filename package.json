@@ -1,0 +1,36 @@
+{
+  "name": "studyroom-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "frontend",
+    "desktop",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "js-yaml": "4.3.2",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:identity-boundaries": "node scripts/check-identity-boundaries.mjs",
+    "check:provider-boundaries": "node scripts/check-provider-boundaries.mjs",
+    "check:web-production": "node scripts/check-web-production.mjs",
+    "check:assets": "npm run check:audio-assets --workspace study-room-frontend && npm run check:scene-assets --workspace study-room-frontend",
+    "typecheck": "npm run typecheck --workspace @studyroom/contracts && npm run typecheck --workspace study-room-frontend && npm run typecheck --workspace study-room-desktop",
+    "create:server-release": "node scripts/create-server-release.mjs",
+    "test:deploy": "node --test scripts/phase12-deploy.test.mjs scripts/check-web-production.test.mjs",
+    "test:server-release": "node --test scripts/create-server-release.test.mjs",
+    "test:update-release": "node --test scripts/create-update-release.test.mjs scripts/verify-update-release.test.mjs scripts/update-signing-config.test.cjs",
+    "test": "npm run check:identity-boundaries && npm run check:provider-boundaries && npm run test:deploy && npm run test:server-release && npm run test:update-release && npm run test --workspace @studyroom/contracts && npm run test --workspace study-room-frontend && npm run test --workspace study-room-desktop",
+    "build": "npm run build --workspace @studyroom/contracts && npm run build --workspace study-room-frontend && npm run build --workspace study-room-desktop",
+    "build:web": "npm run build --workspace @studyroom/contracts && npm run build:web --workspace study-room-frontend",
+    "build:desktop-candidate": "npm run build --workspace @studyroom/contracts && npm run build:desktop-candidate --workspace study-room-frontend && npm run build --workspace study-room-desktop",
+    "package:desktop": "npm run build:desktop-candidate && npm run package --workspace study-room-desktop"
+  }
+}

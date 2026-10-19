@@ -1,0 +1,47 @@
+/* Native-inspired product chrome, preserving the approved scenic authentication pages. */
+.auth-page { position:relative; isolation:isolate; min-height:100dvh; font-family:var(--sr-font-sans); color:var(--sr-color-text); background:var(--sr-color-canvas); }
+.standalone-desktop .auth-page { min-height:0; height:100%; }
+.auth-page .bg { position:absolute; inset:0; pointer-events:none; animation:none; transition:none; transform:none; }
+.auth-page .page { min-height:100dvh; gap:clamp(32px,5vw,80px); padding:112px clamp(24px,5vw,72px) 40px; grid-template-columns:minmax(0,1fr) minmax(320px,420px); transition:none; }
+.standalone-desktop .auth-page .page { min-height:100dvh; padding-top:128px; }
+.auth-page .hero { max-width:600px; padding-top:0; }
+.auth-page h1 { font-size:clamp(48px,6vw,80px); line-height:1.12; font-weight:650; letter-spacing:-.04em; text-wrap:balance; }
+.auth-page .kicker { font-weight:500; font-size:11px; margin-bottom:24px; color:var(--sr-color-text-muted); }
+.auth-page .copy { max-width:440px; font-size:15px; line-height:1.8; font-weight:400; }
+.auth-page :is(.login-card,.register-card) { padding:28px; border-radius:var(--sr-radius-panel); background:var(--sr-color-surface); border-color:var(--sr-color-line-strong); animation:none; }
+.auth-page .card-head { align-items:center; margin-bottom:28px; }
+.auth-page .card-head h2 { font-size:26px; font-weight:650; }
+.auth-page .card-head span { font-size:11px; font-weight:500; color:var(--sr-color-text-muted); }
+.auth-page :is(.brand,.top-actions) { position:absolute; top:28px; }
+.auth-page .brand { left:clamp(24px,5vw,72px); min-height:44px; font-weight:600; }
+.auth-page .top-actions { right:clamp(24px,5vw,72px); }
+/* Reserve controls in content only; the scenic background still reaches y=0. */
+.standalone-desktop .auth-page :is(.brand,.top-actions) { top:64px; }
+.auth-page :is(.pill,.auto-login,.submit) { min-height:44px; border-radius:var(--sr-radius-control); transition:background-color var(--sr-motion-fast) ease,color var(--sr-motion-fast) ease,border-color var(--sr-motion-fast) ease; font-weight:600; }
+.auth-page .submit { min-height:48px; background:var(--sr-color-accent); color:var(--sr-color-accent-ink); }
+.auth-page .auto-login { padding:0 12px; background:rgba(255,255,255,.035); }
+.auth-page .auto-login strong { font-size:13px; font-weight:500; }
+.auth-page .auto-switch { flex:none; }
+.auth-page .auto-switch i { transition:transform var(--sr-motion-medium) var(--sr-ease-out); }
+.auth-page .auto-login.active .auto-switch { background:var(--sr-color-accent); }
+.auth-page :is(.pill,.auto-login,.submit):hover { transform:none; }
+.auth-page .switch-line { align-items:center; font-weight:400; font-size:13px; }
+.auth-page .switch-line button { min-height:44px; font-weight:600; border-radius:8px; }
+.auth-page button:focus-visible { outline:2px solid var(--sr-color-focus); outline-offset:3px; }
+.auth-page.leaving :is(.bg,.page) { opacity:1; transform:none; filter:none; }
+@media(hover:hover) and (pointer:fine) {
+ .auth-page :is(.pill,.auto-login):hover { background:rgba(255,255,255,.12); }
+ .auth-page button:not(:disabled):active { filter:brightness(.93); }
+}
+@media(max-width:860px) {
+ .auth-page .page { grid-template-columns:minmax(0,1fr); padding:100px 20px 28px; }
+ .auth-page .hero { display:none; }
+ .auth-page :is(.login-card,.register-card) { justify-self:center; width:min(420px,100%); padding:24px; }
+ .auth-page .brand { left:20px; top:20px; gap:8px; }
+ .auth-page .top-actions { right:20px; top:20px; }
+ .auth-page .brand-icon { width:30px; height:30px; }
+}
+@media(max-height:720px) and (min-width:861px) { .auth-page .page { padding-top:90px; padding-bottom:24px; } .auth-page :is(.login-card,.register-card) { padding:24px; } .auth-page .card-head { margin-bottom:20px; } }
+@media(prefers-reduced-motion:reduce) { .auth-page *, .auth-page *::before, .auth-page *::after { animation:none!important; transition:none!important; } }
+@media(prefers-reduced-transparency:reduce) { .auth-page :is(.login-card,.register-card) { background:var(--sr-color-surface-solid); backdrop-filter:none; } }
+.sr-reduced-transparency .auth-page :is(.login-card,.register-card) { background:var(--sr-color-surface-solid); backdrop-filter:none; }

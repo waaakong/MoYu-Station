@@ -1,0 +1,17 @@
+# Root-owned (0600) server-side inputs used by Phase 12 scripts.
+# This file contains paths and identifiers only. MySQL credentials belong in
+# MYSQL_DEFAULTS_FILE and must not be passed on the command line.
+PROD_DB_NAME=study_room
+MYSQL_DEFAULTS_FILE=/root/.my.cnf
+V1_JAR_PATH=/opt/study-room/app/study-room-backend.jar
+V1_WEB_ROOT=/var/www/study-room
+PROD_UPLOAD_ROOT=/opt/study-room/backend/uploads
+V1_ENV_FILE=/etc/study-room/study-room.env
+V1_SOURCE_ROOT=/opt/study-room/source
+# Use "domain" for the normal production route or "ip" while filing is
+# deferred. IP mode requires a publicly trusted certificate for PUBLIC_IP.
+PUBLIC_ENTRY_MODE=domain
+PUBLIC_DOMAIN=moyustation.xyz
+PUBLIC_IP=
+# Set to a protected second filesystem or remote-mounted path when available.
+SECONDARY_EVIDENCE_DIR=

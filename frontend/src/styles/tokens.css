@@ -1,0 +1,67 @@
+:root {
+  color-scheme: dark;
+  --sr-color-canvas: #171918;
+  --sr-color-surface: rgba(36, 39, 38, 0.76);
+  --sr-color-surface-solid: #292c2b;
+  --sr-color-surface-raised: #363a38;
+  --sr-color-line: rgba(240, 241, 237, 0.14);
+  --sr-color-line-strong: rgba(245, 246, 242, 0.28);
+  --sr-color-text: #f3f4ef;
+  --sr-color-text-muted: #d2d5d0;
+  --sr-color-text-faint: #b8bdb7;
+  --sr-color-accent: #eeefeb;
+  --sr-color-accent-ink: #202522;
+  --sr-color-selected: #505653;
+  --sr-color-focus: #dae1db;
+  --sr-color-hover: rgba(240, 241, 237, 0.12);
+  --sr-material-regular: rgba(25, 30, 29, 0.38);
+  --sr-material-reading: rgba(25, 30, 29, 0.66);
+  --sr-material-floating: rgba(29, 34, 32, 0.82);
+  --sr-material-sheen: linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.025) 45%, rgba(240,241,237,.035));
+  --sr-material-edge: rgba(240, 241, 237, 0.24);
+  --sr-material-filter: blur(24px) saturate(115%);
+  --sr-material-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(240,241,237,.08), 0 12px 32px rgba(6,8,7,.22);
+  --sr-color-warning: #e4c68d;
+  --sr-color-danger: #ff8f86;
+  --sr-color-success: #8dd7ae;
+  --sr-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --sr-font-display: Georgia, "Noto Serif SC", "Songti SC", serif;
+  --sr-space-1: 4px;
+  --sr-space-2: 8px;
+  --sr-space-3: 12px;
+  --sr-space-4: 16px;
+  --sr-space-5: 20px;
+  --sr-space-6: 24px;
+  --sr-space-8: 32px;
+  --sr-space-10: 40px;
+  --sr-radius-sm: 8px;
+  --sr-radius-md: 14px;
+  --sr-radius-lg: 22px;
+  --sr-radius-control: 12px;
+  --sr-radius-panel: 20px;
+  --sr-control-height: 44px;
+  --sr-shadow-raised: 0 16px 48px rgba(4, 10, 22, 0.3), inset 0 1px rgba(255, 255, 255, 0.18);
+  --sr-titlebar-height: 0px;
+  --sr-rail-width: 0px;
+  --sr-player-height: 0px;
+  --sr-nav-top: 30px;
+  --sr-page-gutter: clamp(16px, 2.4vw, 32px);
+  --sr-floating-player-width: clamp(320px, 34vw, 460px);
+  --sr-drawer-width: min(380px, calc(100vw - 24px));
+  --sr-motion-fast: 140ms;
+  --sr-motion-medium: 220ms;
+  --sr-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sr-layer-stage: 0;
+  --sr-layer-rail: 30;
+  --sr-layer-player: 35;
+  --sr-layer-drawer: 50;
+  --sr-layer-toast: 70;
+}
+
+@media (max-width: 1365px), (max-height: 760px) {
+  :root {
+    --sr-nav-top: 22px;
+    --sr-page-gutter: 24px;
+    --sr-floating-player-width: 340px;
+  }
+}

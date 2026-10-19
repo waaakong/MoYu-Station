@@ -1,0 +1,61 @@
+/* Local, desktop-only startup surface. No remote fonts or visual dependencies. */
+#moyu-startup {
+  --startup-ease: var(--sr-ease-out, cubic-bezier(.22,1,.36,1));
+  --startup-duration: var(--sr-motion-medium, 220ms);
+  position: fixed; inset: 0; z-index: 10000; overflow: auto;
+  display: grid; grid-template-rows: 64px 1fr 80px;
+  box-sizing: border-box; margin: 0; color: #e7edde; background: #101714;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  isolation: isolate; opacity: 1;
+  transition: opacity var(--startup-duration) var(--startup-ease);
+  -webkit-app-region: no-drag;
+}
+#moyu-startup *, #moyu-startup *::before, #moyu-startup *::after { box-sizing: border-box; }
+#moyu-startup[hidden] { display: none; }
+#moyu-startup[data-state="revealing"] { opacity: 0; }
+.moyu-startup__chrome { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 8px 28px; -webkit-app-region: drag; }
+.moyu-startup__chrome > span { font-size: 12px; letter-spacing: .16em; color: #aebbb4; }
+#moyu-startup button { min-height: 44px; padding: 10px 18px; border: 1px solid #e5efe126; border-radius: 999px; background: #e5efe107; color: #d9e3dc; font: inherit; font-size: 13px; cursor: pointer; -webkit-app-region: no-drag; }
+#moyu-startup button:focus-visible { outline: 2px solid #dceade; outline-offset: 4px; }
+#moyu-startup button:disabled { opacity: .5; cursor: wait; }
+#moyu-startup [hidden] { display: none !important; }
+#moyu-startup .moyu-startup__close { width: 44px; padding: 0; border-color: transparent; display: grid; place-items: center; }
+.moyu-startup__close svg { width: 18px; height: 18px; }
+.moyu-startup__center { align-self: center; justify-self: center; position: relative; text-align: center; width: min(560px, calc(100% - 48px)); padding: 30px 0; }
+.moyu-startup__atmosphere { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.moyu-startup__aura { position: absolute; inset: 0; background: radial-gradient(ellipse at 48% 45%, #96ae7324, transparent 58%); animation: moyu-light 1400ms var(--startup-ease) both; }
+.moyu-startup__aura--near { background: radial-gradient(ellipse at 64% 65%, #93aa8430, transparent 44%); animation-delay: 200ms; transform-origin: 65% 60%; }
+.moyu-startup__horizon { position: absolute; left: calc(50% - 300px); top: 48%; width: 600px; height: 1px; pointer-events: none; background: linear-gradient(90deg, transparent, #a9be941f, transparent); animation: moyu-horizon 1300ms var(--startup-ease) 480ms both; }
+.moyu-startup__mark { display: block; width: 112px; height: 138px; margin: 0 auto 24px; overflow: visible; }
+.moyu-startup__frame { color: #e4ecd7; animation: moyu-arch 850ms var(--startup-ease) 150ms both; }
+.moyu-startup__sun { color: #bdcbaa; transform-origin: 50% 50%; animation: moyu-sun 900ms var(--startup-ease) 320ms both; }
+.moyu-startup__mountain--back { color: #71907c; animation: moyu-mountain 950ms var(--startup-ease) 450ms both; }
+.moyu-startup__mountain { color: #dce8cd; animation: moyu-mountain 850ms var(--startup-ease) 630ms both; }
+.moyu-startup__water { color: #b7c8a9; transform-origin: 50% 50%; animation: moyu-water 750ms var(--startup-ease) 850ms both; }
+.moyu-startup__ripples{position:absolute;width:180px;height:24px;left:calc(50% - 90px);top:158px;pointer-events:none;stroke:#b7c8a9;stroke-width:.8}
+.moyu-startup__ripple{opacity:0}
+#moyu-startup[data-motion-engine="gsap"] *{animation:none}
+#moyu-startup h1 { display: flex; justify-content: center; gap: .23em; margin: 0; font-family: Georgia, 'Songti SC', serif; font-weight: 400; font-size: clamp(36px, 4vw, 48px); line-height: 1.4; }
+#moyu-startup h1 span { display: block; animation: moyu-arrive 700ms var(--startup-ease) 900ms both; }
+#moyu-startup h1 span + span { animation-delay: 980ms; }
+.moyu-startup__english { margin: 12px 0 0; color: #8ea18c; font-size: 10px; letter-spacing: .4em; text-indent: .4em; animation: moyu-arrive 650ms var(--startup-ease) 1080ms both; }
+.moyu-startup__tagline { margin: 23px 0 32px; color: #b2c0b0; font-size: 13px; line-height: 1.8; letter-spacing: .12em; animation: moyu-arrive 700ms var(--startup-ease) 1190ms both; }
+.moyu-startup__status { min-height: 24px; margin: 0; font-size: 13px; line-height: 1.8; color: #c3d0c7; }
+.moyu-startup__detail { min-height: 22px; margin: 8px 0 0; color: #9eafa4; font-size: 12px; line-height: 1.8; }
+.moyu-startup__actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+.moyu-startup__footer { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; gap: 20px; }
+.moyu-startup__footer > span { color: #92a297; font-size: 10px; letter-spacing: .18em; }
+#moyu-startup[data-state="failed"] .moyu-startup__status { color: #f1b9a8; }
+#moyu-startup[data-static="true"] *, .sr-reduced-motion #moyu-startup * { animation: none; }
+#moyu-startup[data-static="true"] .moyu-startup__aura, #moyu-startup[data-static="true"] .moyu-startup__horizon { display: none; }
+#moyu-startup[data-static="true"] { transition-duration: 140ms; }
+@keyframes moyu-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes moyu-light { from { opacity: 0; transform: scale(.94) translateY(16px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes moyu-horizon { from { opacity: 0; transform: scaleX(.94); } to { opacity: 1; transform: scaleX(1); } }
+@keyframes moyu-arch { from { opacity: 0; clip-path: inset(100% 0 0 0); transform: translateY(5px); } to { opacity: 1; clip-path: inset(0); transform: translateY(0); } }
+@keyframes moyu-mountain { from { opacity: 0; transform: translateY(11px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes moyu-sun { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes moyu-water { from { opacity: 0; transform: scaleX(.94) translateY(3px); } to { opacity: 1; transform: scaleX(1) translateY(0); } }
+@media (prefers-reduced-motion: reduce) { #moyu-startup * { animation: none; } #moyu-startup { transition-duration: 140ms; } }
+@media (hover:hover) and (pointer:fine) { #moyu-startup button:hover { background: #e5efe114; } }
+@media (max-height: 640px) { .moyu-startup__mark { height: 84px; margin-bottom: 16px; } .moyu-startup__ripples{top:108px}.moyu-startup__tagline { margin-bottom: 24px; } }

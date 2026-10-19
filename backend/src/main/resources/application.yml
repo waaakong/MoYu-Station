@@ -1,0 +1,134 @@
+server:
+  port: 8080
+  shutdown: graceful
+  servlet:
+    session:
+      timeout: 12h
+      cookie:
+        name: STUDYROOM_SESSION
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: study-room-backend
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 190MB
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${STUDYROOM_DB_URL:jdbc:mysql://localhost:3306/study_room?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${STUDYROOM_DB_USERNAME:studyroom}
+    password: ${STUDYROOM_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${STUDYROOM_DB_POOL_MAXIMUM:10}
+      minimum-idle: ${STUDYROOM_DB_POOL_MINIMUM_IDLE:2}
+      connection-timeout: ${STUDYROOM_DB_CONNECTION_TIMEOUT_MS:3000}
+      validation-timeout: ${STUDYROOM_DB_VALIDATION_TIMEOUT_MS:2000}
+  redis:
+    host: ${STUDYROOM_REDIS_HOST:localhost}
+    port: ${STUDYROOM_REDIS_PORT:6379}
+    database: ${STUDYROOM_REDIS_DATABASE:0}
+    password: ${STUDYROOM_REDIS_PASSWORD:}
+    timeout: 1500ms
+  session:
+    store-type: ${STUDYROOM_SESSION_STORE:redis}
+    redis:
+      namespace: studyroom:session
+      configure-action: none
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  flyway:
+    enabled: ${STUDYROOM_FLYWAY_ENABLED:true}
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    clean-disabled: true
+    locations: classpath:db/migration
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+studyroom:
+  reliable-create:
+    enabled: ${STUDYROOM_RELIABLE_CREATE_ENABLED:false}
+  feedback:
+    retention-enabled: ${STUDYROOM_FEEDBACK_RETENTION_ENABLED:false}
+    retention-interval-ms: 3600000
+  chat:
+    private-deletion-enabled: ${STUDYROOM_PRIVATE_MESSAGE_DELETION_ENABLED:false}
+  upload-dir: ${STUDYROOM_UPLOAD_DIR:uploads}
+  release:
+    id: ${STUDYROOM_RELEASE_ID:development}
+    git-sha: ${STUDYROOM_RELEASE_GIT_SHA:unknown}
+    built-at: ${STUDYROOM_RELEASE_BUILT_AT:unknown}
+  readiness:
+    interval-ms: ${STUDYROOM_READINESS_INTERVAL_MS:30000}
+    timeout-ms: ${STUDYROOM_READINESS_TIMEOUT_MS:2000}
+    stale-after-ms: ${STUDYROOM_READINESS_STALE_AFTER_MS:90000}
+    minimum-free-space: ${STUDYROOM_READINESS_MINIMUM_FREE_SPACE:8589934592}
+  password:
+    bcrypt-strength: ${STUDYROOM_BCRYPT_STRENGTH:11}
+    minimum-characters: 8
+    maximum-characters: 64
+    maximum-utf8-bytes: 72
+  invitation:
+    pepper: ${STUDYROOM_INVITATION_PEPPER:}
+    code-bytes: 16
+    maximum-uses: 100
+  auth-security:
+    concurrent-sessions: ${STUDYROOM_CONCURRENT_SESSIONS:false}
+    production-mode: ${STUDYROOM_PRODUCTION_MODE:false}
+    web-session-idle: 12h
+    desktop-session-lifetime: 30d
+    desktop-cookie-refresh: 24h
+    desktop-origin: ${STUDYROOM_DESKTOP_ORIGIN:https://desktop.moyustation.xyz}
+    desktop-header-name: X-StudyRoom-Client
+    desktop-header-value: desktop-v1
+    secure-cookie: ${STUDYROOM_COOKIE_SECURE:false}
+    local-fallback-capacity: 4096
+    login:
+      maximum-attempts: 10
+      fallback-maximum-attempts: 5
+      window: 5m
+    registration:
+      maximum-attempts: 5
+      fallback-maximum-attempts: 3
+      window: 30m
+  admin-security:
+    protected-admin-id: ${STUDYROOM_PROTECTED_ADMIN_ID:}
+    reverification-window: 10m
+  admin-metrics:
+    interval-ms: 60000
+    timeout-ms: 3000
+    stale-after-ms: 300000
+  activity:
+    # Requires explicit V16 migration in the controlled deployment workflow.
+    enabled: ${STUDYROOM_ACTIVITY_ENABLED:false}
+  upload-quota:
+    user-soft-limit: ${STUDYROOM_UPLOAD_USER_SOFT_LIMIT:268435456}
+    global-soft-limit: ${STUDYROOM_UPLOAD_GLOBAL_SOFT_LIMIT:8589934592}
+    minimum-free-space: ${STUDYROOM_UPLOAD_MINIMUM_FREE_SPACE:8589934592}
+  client-updates:
+    enabled: ${STUDYROOM_CLIENT_UPDATES_ENABLED:false}
+    github-downloads-enabled: ${STUDYROOM_CLIENT_UPDATES_GITHUB_DOWNLOADS_ENABLED:false}
+    github-repository: ${STUDYROOM_CLIENT_UPDATES_GITHUB_REPOSITORY:}
+    base-url: ${STUDYROOM_CLIENT_UPDATES_BASE_URL:https://moyustation.xyz/private-updates}
+    storage-root: ${STUDYROOM_CLIENT_UPDATES_STORAGE_ROOT:/srv/studyroom-updates/releases}
+    grant-ttl: ${STUDYROOM_CLIENT_UPDATES_GRANT_TTL:10m}
+    import-secret: ${STUDYROOM_CLIENT_UPDATES_IMPORT_SECRET:}
+    manifest-public-keys: {}
+  radio-relay:
+    enabled: ${STUDYROOM_RADIO_RELAY_ENABLED:false}
+    max-connections: ${STUDYROOM_RADIO_RELAY_MAX_CONNECTIONS:10}
+  cors:
+    allow-all: ${STUDYROOM_CORS_ALLOW_ALL:false}
+    production-mode: ${STUDYROOM_PRODUCTION_MODE:false}
+    allowed-origin-patterns: ${STUDYROOM_CORS_ALLOWED_ORIGIN_PATTERNS:https://moyustation.xyz,https://www.moyustation.xyz,https://desktop.moyustation.xyz,http://localhost:[*],http://127.0.0.1:[*]}

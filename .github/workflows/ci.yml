@@ -1,0 +1,153 @@
+name: StudyRoom CI
+
+on:
+  push:
+    branches: [main, refactor/electron-v2]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-secrets.mjs
+      - run: node scripts/check-identity-boundaries.mjs
+
+  workspace:
+    name: Workspace checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run check:assets
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Run platform-neutral browser E2E
+        run: npm run test:e2e:functional --workspace study-room-frontend
+      - name: Configure Electron sandbox helper
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - run: xvfb-run -a npm run smoke --workspace study-room-desktop
+
+  visual:
+    name: Windows visual baselines
+    # The clean public export intentionally omits historical screenshots.
+    if: github.repository != 'waaakong/MoYu-Station' || vars.MOYU_VISUAL_BASELINES_READY == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Run Windows visual regression baselines
+        run: npm run test:e2e:visual --workspace study-room-frontend
+      - name: Retain visual diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs-${{ github.run_id }}
+          path: frontend/test-results
+          if-no-files-found: error
+          retention-days: 3
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn --batch-mode test
+      - run: mvn --batch-mode -DskipTests package
+
+  deployment:
+    name: Phase 12 deployment gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: npm ci
+      - name: Install deployment validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck nginx redis-server openssl
+      - name: Check shell syntax, ShellCheck, and failed-switch rollback
+        run: sudo --preserve-env=PATH bash deploy/scripts/test/phase12-tooling.sh
+      - name: Verify systemd resource policies
+        run: |
+          printf '[Unit]\nDescription=CI MySQL placeholder\n[Service]\nType=oneshot\nExecStart=/bin/true\n' | sudo tee /etc/systemd/system/mysqld.service >/dev/null
+          systemd-analyze verify deploy/systemd/studyroom-v2.service deploy/systemd/studyroom-v2-redis.service
+      - name: Parse isolated Redis configuration
+        run: |
+          mkdir -p /tmp/studyroom-redis-test
+          sudo install -d -m 0755 -o "$USER" /var/lib/studyroom-v2/redis
+          set +e
+          timeout 3 redis-server deploy/redis/studyroom-v2.conf --supervised no --port 6399 --dir /tmp/studyroom-redis-test --appendonly no >/tmp/studyroom-redis-test/output.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then cat /tmp/studyroom-redis-test/output.log; exit "$status"; fi
+          ! grep -Eiq 'fatal|error' /tmp/studyroom-redis-test/output.log
+      - name: Validate candidate and production Nginx templates
+        run: |
+          sudo install -d -m 0755 /etc/nginx/studyroom/upstreams /srv/studyroom-maintenance /etc/letsencrypt/live/moyustation.xyz
+          sudo install -m 0644 deploy/nginx/proxy-headers.conf /etc/nginx/studyroom/proxy-headers.conf
+          sudo install -m 0644 deploy/nginx/studyroom-maintenance.conf /etc/nginx/studyroom/maintenance.conf
+          sudo install -m 0644 deploy/nginx/upstream-v2.conf /etc/nginx/studyroom/upstreams/v2.conf
+          sudo ln -sfn /etc/nginx/studyroom/upstreams/v2.conf /etc/nginx/studyroom/upstream.conf
+          sudo install -m 0644 deploy/nginx/maintenance.html /srv/studyroom-maintenance/maintenance.html
+          sudo openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj '/CN=moyustation.xyz' -keyout /etc/letsencrypt/live/moyustation.xyz/privkey.pem -out /etc/letsencrypt/live/moyustation.xyz/fullchain.pem >/dev/null 2>&1
+          sudo install -m 0644 deploy/nginx/studyroom-v2-candidate.conf /etc/nginx/conf.d/studyroom-v2-candidate.conf
+          sudo install -m 0644 deploy/nginx/studyroom-v2.conf /etc/nginx/conf.d/studyroom-v2.conf
+          sudo nginx -t
+      - name: Build and scan production server artifacts
+        run: |
+          npm run build:web
+          npm run check:web-production
+          mvn --batch-mode -DskipTests package -f backend/pom.xml
+      - name: Prove deterministic release creation and tamper rejection
+        run: |
+          git_sha="$(git rev-parse HEAD)"
+          built_at="$(node -e 'console.log(new Date(Number(process.argv[1]) * 1000).toISOString())' "$(git show -s --format=%ct HEAD)")"
+          release_id="ci-${git_sha:0:12}"
+          node scripts/create-server-release.mjs --backend backend/target/study-room-backend-0.1.0.jar --web frontend/dist --output /tmp/studyroom-release-a --release-id "$release_id" --git-sha "$git_sha" --built-at "$built_at"
+          node scripts/create-server-release.mjs --backend backend/target/study-room-backend-0.1.0.jar --web frontend/dist --output /tmp/studyroom-release-b --release-id "$release_id" --git-sha "$git_sha" --built-at "$built_at"
+          diff -qr "/tmp/studyroom-release-a/$release_id" "/tmp/studyroom-release-b/$release_id"
+          python3 deploy/scripts/lib/verify-release.py "/tmp/studyroom-release-a/$release_id"
+          printf 'tamper' >> "/tmp/studyroom-release-a/$release_id/web/index.html"
+          if python3 deploy/scripts/lib/verify-release.py "/tmp/studyroom-release-a/$release_id"; then exit 1; fi

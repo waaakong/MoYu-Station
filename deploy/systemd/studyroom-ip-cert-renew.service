@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew the short-lived StudyRoom public IP certificate
+Wants=network-online.target
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/opt/certbot-ip/bin/certbot renew --quiet --deploy-hook "/usr/bin/systemctl reload nginx"
+ExecStartPost=/usr/bin/openssl x509 -checkend 172800 -noout -in /etc/letsencrypt/live/8.163.29.26/fullchain.pem

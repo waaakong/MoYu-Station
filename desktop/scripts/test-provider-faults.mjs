@@ -1,0 +1,14 @@
+import { build } from 'esbuild';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const output = await mkdtemp(join(tmpdir(), 'studyroom-provider-faults-'));
+await build({entryPoints:['provider-fault-host','provider-fault-worker'].map(name => join(root, `test-electron/${name}.ts`)), outdir:output, outExtension:{'.js':'.cjs'}, bundle:true, platform:'node', target:'node24', format:'cjs', external:['electron','node:*']});
+const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(createRequire(import.meta.url)('electron'), [join(output, 'provider-fault-host.cjs')], {env, windowsHide:true, stdio:'inherit'});
+child.on('error', error => { console.error(error); process.exitCode = 1; });
+child.on('exit', code => { console.log(`Evidence directory: ${output}`); process.exitCode = code ?? 1; });

@@ -1,0 +1,32 @@
+[Unit]
+Description=StudyRoom V2 isolated Redis
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=notify
+User=studyroom-v2
+Group=studyroom-v2
+ExecStart=/usr/bin/redis-server /etc/studyroom-v2/redis.conf --supervised systemd --daemonize no
+ExecStop=/bin/kill -s TERM $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+MemoryHigh=72M
+MemoryMax=80M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/studyroom-v2/redis
+
+[Install]
+WantedBy=multi-user.target

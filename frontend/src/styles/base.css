@@ -1,0 +1,54 @@
+@import "./tokens.css";
+@import "./layout.css";
+@import "./motion.css";
+@import "./glass.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100dvh;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--sr-font-sans);
+  background: var(--sr-color-canvas);
+  color: var(--sr-color-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* One quiet scrollbar treatment; never hide affordances from keyboard users. */
+* { scrollbar-width: thin; scrollbar-color: #8090a5 transparent; }
+*::-webkit-scrollbar { width: 7px; height: 7px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: #8090a5; background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+::selection { background: var(--sr-color-accent); color: var(--sr-color-accent-ink); }
+button, a, input, textarea, select { touch-action: manipulation; }
+input, textarea, select { accent-color: var(--sr-color-accent); }
+button:disabled { cursor: not-allowed; }
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, select { font-size: 16px; }
+}

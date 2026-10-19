@@ -1,0 +1,114 @@
+name: Prepare signed desktop Release (draft only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable version tag, for example v0.3.0
+        required: true
+        type: string
+      channel:
+        description: Update channel
+        type: choice
+        options: [stable, beta, provider-experimental]
+        default: stable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-draft:
+    # Protected, dedicated signing runner. No certificate/private key on public runners.
+    runs-on: [self-hosted, Windows, X64, moyu-signing]
+    environment: moyu-release-draft
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      STUDYROOM_UPDATE_CHANNEL: ${{ inputs.channel }}
+      STUDYROOM_UPDATE_CONTROL_ENABLED: 'true'
+      STUDYROOM_UPDATE_PUBLIC_KEYS_JSON: ${{ vars.MOYU_MANIFEST_PUBLIC_KEYS_JSON }}
+      STUDYROOM_SIGNING_MODE: trusted
+      STUDYROOM_SIGNING_PUBLISHER: ${{ vars.MOYU_SIGNING_PUBLISHER }}
+      STUDYROOM_SIGNING_CERT_SHA1: ${{ vars.MOYU_SIGNING_CERT_SHA1 }}
+      STUDYROOM_SIGNING_TIMESTAMP_URL: ${{ vars.MOYU_SIGNING_TIMESTAMP_URL }}
+      MANIFEST_KEY_PATH: ${{ vars.MOYU_MANIFEST_KEY_PATH }}
+      MANIFEST_KEY_ID: ${{ vars.MOYU_MANIFEST_KEY_ID }}
+      ALLOW_PUBLIC_INSTALLERS: ${{ vars.MOYU_ALLOW_PUBLIC_INSTALLERS }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Validate tag, source, rights and release boundary
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+(?:-(?:trial\.\d{8}|beta|exp)\.\d+)?$') { throw 'Invalid version tag' }
+          $env:STUDYROOM_RELEASE_VERSION = $env:RELEASE_TAG.Substring(1)
+          "STUDYROOM_RELEASE_VERSION=$env:STUDYROOM_RELEASE_VERSION" >> $env:GITHUB_ENV
+          $tagCommit = git rev-parse "$($env:RELEASE_TAG)^{commit}"
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne (git rev-parse HEAD)) { throw 'Source/tag mismatch' }
+          if ((git status --porcelain --untracked-files=no)) { throw 'Tracked source is dirty' }
+          $visibility = gh repo view $env:GITHUB_REPOSITORY --json visibility --jq .visibility
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify repository visibility' }
+          if ($visibility -ne 'PUBLIC') { throw 'Direct GitHub distribution requires public assets; use protected server downloads for private distribution' }
+          if ($env:ALLOW_PUBLIC_INSTALLERS -ne 'true') { throw 'Public installer distribution has not been approved' }
+          if (!(Test-Path -LiteralPath "docs/releases/$env:STUDYROOM_RELEASE_VERSION.md")) { throw 'Version-specific release notes are required' }
+          if (!(Test-Path -LiteralPath $env:MANIFEST_KEY_PATH)) { throw 'Signing runner manifest key is missing' }
+          gh release view $env:RELEASE_TAG --json id 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'Release already exists: never overwrite assets, create a new version' }
+      - run: npm ci
+      - name: Tests and release signing configuration
+        run: |
+          npm run check:secrets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run check:assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:update-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:unit --workspace study-room-desktop -- updateSecurity updateTransport updateManagerLifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node -e "require('./desktop/scripts/update-signing-config.cjs').updateSigningConfig()"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and verify trusted artifacts
+        run: |
+          npm run build:desktop-candidate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run package --workspace study-room-desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $directory = "desktop/release/$env:STUDYROOM_UPDATE_CHANNEL"
+          $executables = @(Get-ChildItem -LiteralPath $directory -Filter *.exe -File)
+          if ($executables.Count -ne 1) { throw 'Ambiguous installer' }
+          $signature = Get-AuthenticodeSignature -LiteralPath $executables[0].FullName
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $env:STUDYROOM_SIGNING_CERT_SHA1 -or !$signature.TimeStamperCertificate) { throw 'Trusted timestamped installer signature required' }
+          node scripts/create-update-release.mjs --channel $env:STUDYROOM_UPDATE_CHANNEL --version $env:STUDYROOM_RELEASE_VERSION --directory $directory --private-key $env:MANIFEST_KEY_PATH --key-id $env:MANIFEST_KEY_ID --github-repository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-update-release.mjs --directory $directory --public-keys-json $env:STUDYROOM_UPDATE_PUBLIC_KEYS_JSON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Create draft after all local validation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release create $env:RELEASE_TAG --verify-tag --draft --title "MoYu $env:STUDYROOM_RELEASE_VERSION" --notes-file "docs/releases/$env:STUDYROOM_RELEASE_VERSION.md"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $directory = "desktop/release/$env:STUDYROOM_UPDATE_CHANNEL"
+          $manifest = Get-Content -LiteralPath "$directory/release.json" -Raw | ConvertFrom-Json
+          $assets = @($manifest.files | ForEach-Object { Join-Path $directory $_.name }) + @("$directory/release.json", "$directory/release.json.sig")
+          gh release upload $env:RELEASE_TAG @assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-update-release.mjs --directory $directory --public-keys-json $env:STUDYROOM_UPDATE_PUBLIC_KEYS_JSON --verify-github-draft true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Deliberately no --clobber, publish, server migration, policy activation or production deployment.
