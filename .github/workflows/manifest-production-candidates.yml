@@ -1,0 +1,101 @@
+name: Manifest-signed production-origin candidates (no publication)
+
+on:
+  push:
+    branches: [codex/manifest-production-pilot-20261021]
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Production-origin candidate ${{ matrix.version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['0.2.0-trial.20261021.1', '0.2.0-trial.20261021.2']
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      STUDYROOM_RELEASE_VERSION: ${{ matrix.version }}
+      STUDYROOM_SIGNING_MODE: manifest-signed
+      STUDYROOM_UPDATE_CONTROL_ENABLED: 'true'
+      STUDYROOM_UPDATE_CHANNEL: stable
+      STUDYROOM_CLOUD_ORIGIN: https://8.163.29.26
+      STUDYROOM_DESKTOP_ORIGIN: https://8.163.29.26
+      STUDYROOM_UPDATE_ORIGIN: https://8.163.29.26
+      STUDYROOM_UPDATE_API_BASE_URL: https://8.163.29.26/api
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Preserve the existing desktop features. Account/platform login and backend
+      # authorization remain mandatory; these flags confer no account privileges.
+      STUDYROOM_EXPERIMENTAL_PROVIDERS: '1'
+      STUDYROOM_PROVIDERS: '1'
+      VITE_FEATURE_MEDIA_ASSETS: '1'
+      VITE_API_BASE_URL: /api
+      VITE_FEATURE_PROVIDERS: '1'
+      VITE_FEATURE_PUBLIC_RADIO: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate configuration, tests and boundaries
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:STUDYROOM_UPDATE_PUBLIC_KEYS_JSON = (Get-Content config/update-public-keys.json -Raw).Trim()
+          foreach ($provider in @('NETEASE','QQ_MUSIC','KUGOU')) {
+            Set-Item "Env:STUDYROOM_PROVIDER_$provider" '1'
+            Set-Item "Env:VITE_FEATURE_PROVIDER_$provider" '1'
+            foreach ($capability in @('SEARCH','PLAYLISTS','FAVORITES','LYRICS','PLAYBACK')) {
+              Set-Item "Env:STUDYROOM_PROVIDER_${provider}_$capability" '1'
+            }
+            Set-Item "Env:STUDYROOM_PROVIDER_${provider}_RECOMMENDATIONS" '0'
+          }
+          node -e "const c=require('./desktop/scripts/update-signing-config.cjs').updateSigningConfig(); if(c.mode!=='manifest-signed'||!c.installEnabled||c.updateOrigin!=='https://8.163.29.26')process.exit(1)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run check:secrets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run check:provider-boundaries
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:update-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build:desktop-candidate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run package --workspace study-room-desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $directory = 'desktop/release/stable'
+          $files = @(Get-ChildItem $directory -File | Where-Object { $_.Extension -in '.exe','.blockmap' -or $_.Name -eq 'latest.yml' })
+          $exe = @($files | Where-Object Extension -eq '.exe')
+          if ($files.Count -ne 3 -or $exe.Count -ne 1 -or $exe[0].Name -ne "MoYu-Setup-$env:STUDYROOM_RELEASE_VERSION-win-x64.exe") { throw 'Unexpected candidate files' }
+          if ((Get-AuthenticodeSignature -LiteralPath $exe[0].FullName).Status -ne 'NotSigned') { throw 'Expected explicitly unsigned installer' }
+          $hashes = @($files | ForEach-Object { @{ name=$_.Name; size=$_.Length; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } })
+          $features = @{}
+          Get-ChildItem Env: | Where-Object { $_.Name -match '^(STUDYROOM_PROVIDER|STUDYROOM_PROVIDERS$|STUDYROOM_EXPERIMENTAL_PROVIDERS$|VITE_FEATURE_)' } | ForEach-Object { $features[$_.Name]=$_.Value }
+          $receipt = @{
+            schema=1; sourceCommit=(git rev-parse HEAD); version=$env:STUDYROOM_RELEASE_VERSION
+            channel='stable'; trustMode='manifest-signed'; authenticode='NotSigned'
+            appId='xyz.moyustation.studyroom'; userDataName='StudyRoom'
+            cloudOrigin=$env:STUDYROOM_CLOUD_ORIGIN; updateOrigin=$env:STUDYROOM_UPDATE_ORIGIN
+            apiBaseUrl=$env:STUDYROOM_UPDATE_API_BASE_URL
+            publicKeysSha256=(Get-FileHash config/update-public-keys.json -Algorithm SHA256).Hash.ToLowerInvariant()
+            features=$features; files=$hashes; workflowRun=$env:GITHUB_RUN_ID
+            publication=false; productionAcceptance=false
+          }
+          $receipt | ConvertTo-Json -Depth 6 | Set-Content "$directory/artifact.json" -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moyu-production-origin-${{ matrix.version }}-${{ github.sha }}
+          path: |
+            desktop/release/stable/*.exe
+            desktop/release/stable/*.blockmap
+            desktop/release/stable/latest.yml
+            desktop/release/stable/artifact.json
+          if-no-files-found: error
+          retention-days: 7
+          # No key, Release write permission, deployment or policy activation.
