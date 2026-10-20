@@ -28,7 +28,10 @@ it('failed refresh preserves list and a later authoritative snapshot removes sta
   const { sync, pending, update, error } = setup(); sync.receive(notice('1'));
   const a = sync.refresh(); pending[0].reject(new Error('断网')); await a;
   expect(update).toHaveBeenLastCalledWith([notice('1')]); expect(error).toHaveBeenLastCalledWith('断网');
-  const b = sync.refresh(); pending[1].resolve([]); await b; expect(update).toHaveBeenLastCalledWith([]);
+  const b = sync.refresh();
+  expect(error).toHaveBeenLastCalledWith('断网');
+  pending[1].resolve([]); await b;
+  expect(update).toHaveBeenLastCalledWith([]); expect(error).toHaveBeenLastCalledWith('');
 });
 it('invalid payloads are not presented as empty success', async () => {
   const { sync, pending, update, error } = setup(); const task = sync.refresh();

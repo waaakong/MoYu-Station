@@ -118,6 +118,9 @@ test('every feed entry refreshes independently and only visible feed subscribes'
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect.poll(() => page.evaluate(() => (window as any).__noticeSockets.filter((s: any) => s.url.endsWith('/ws/notifications') && s.readyState === 1).length)).toBe(0);
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
+  // Foreground entry also refreshes capabilities/posts and then notifications.
+  // Wait for that actual operation before changing the fixture's server outcome.
+  await expect(page.locator('.section-head').getByRole('button', { name: '刷新', exact: true })).toBeEnabled();
   await expect(page.locator('.activity-notices')).toContainText('互动服务暂不可用');
   await expect(page.getByRole('button', { name: '同学2 点赞了你的动态。' })).toBeVisible();
   state.notificationFailure = false; await page.locator('.activity-notices').getByRole('button', { name: '重试' }).click();

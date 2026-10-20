@@ -168,6 +168,10 @@ jobs:
       STUDYROOM_UPDATE_CONTROL_ENABLED: 'true'
       STUDYROOM_UPDATE_CHANNEL: stable
       STUDYROOM_RELEASE_VERSION: ${{ matrix.version }}
+      # Isolated synthetic acceptance service, never the live production control plane.
+      STUDYROOM_CLOUD_ORIGIN: https://8.163.29.26:8443
+      STUDYROOM_UPDATE_ORIGIN: https://8.163.29.26:8443
+      STUDYROOM_UPDATE_API_BASE_URL: https://8.163.29.26:8443/api
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     defaults:
       run:

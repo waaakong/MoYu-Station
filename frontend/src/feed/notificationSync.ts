@@ -31,7 +31,6 @@ export class FeedNotificationSync {
   async refresh() {
     if (!this.active) return;
     const request = ++this.request, sequence = this.sequence;
-    this.deps.error('');
     try {
       const rows = await this.deps.fetch();
       if (!this.active || request !== this.request) return;
@@ -39,6 +38,9 @@ export class FeedNotificationSync {
       this.items = merge([...this.events.filter(event => event.sequence > sequence).map(event => event.notice), ...rows]);
       this.events = this.events.filter(event => event.sequence > sequence);
       this.deps.update(this.items);
+      // A reconnect starts another refresh, but has not recovered yet. Keep the
+      // failure and retry affordance visible until the current snapshot succeeds.
+      this.deps.error('');
     } catch (error) {
       if (this.active && request === this.request) this.deps.error(error instanceof Error ? error.message : '互动通知加载失败，请重试。');
     }
