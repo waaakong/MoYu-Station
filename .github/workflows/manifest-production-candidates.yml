@@ -28,6 +28,7 @@ jobs:
       STUDYROOM_UPDATE_ORIGIN: https://8.163.29.26
       STUDYROOM_UPDATE_API_BASE_URL: https://8.163.29.26/api
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      DEBUG: electron-builder
       # Preserve the existing desktop features. Account/platform login and backend
       # authorization remain mandatory; these flags confer no account privileges.
       STUDYROOM_EXPERIMENTAL_PROVIDERS: '1'
@@ -68,7 +69,9 @@ jobs:
           npm run build:desktop-candidate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run package --workspace study-room-desktop
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $packageExit = $LASTEXITCODE
+          Write-Output "Installer packaging exit code: $packageExit"
+          if ($packageExit -ne 0) { throw "Installer packaging failed ($packageExit)" }
           $directory = 'desktop/release/stable'
           $files = @(Get-ChildItem $directory -File | Where-Object { $_.Extension -in '.exe','.blockmap' -or $_.Name -eq 'latest.yml' })
           $exe = @($files | Where-Object Extension -eq '.exe')
