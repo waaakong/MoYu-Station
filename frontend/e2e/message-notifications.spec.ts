@@ -22,7 +22,8 @@ async function prepare(page: Page, path = '/scene') {
     }
     Object.defineProperty(window, 'WebSocket', { configurable: true, value: Socket });
   });
-  const state = { unread: [] as any[], notifications: [] as any[], notificationRequests: 0, notificationFailure: false };
+  const state = { unread: [] as any[], notifications: [] as any[], notificationRequests: 0, notificationFailure: false,
+    notificationGate: undefined as Promise<void> | undefined };
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname; let data: any = [];
     if (path.endsWith('/auth/me')) data = { id: '2', username: 'notification-fixture', nickname: '通知验收', userType: 'NORMAL' };
@@ -34,7 +35,9 @@ async function prepare(page: Page, path = '/scene') {
     else if (path.endsWith('/feed/capabilities')) data = { dualFeed: true };
     else if (path.endsWith('/feed/posts')) data = { items: [], nextCursor: null, followingIds: [], relationshipVersion: 0 };
     else if (path.endsWith('/feed/notifications')) {
-      state.notificationRequests++; data = state.notifications;
+      state.notificationRequests++;
+      await state.notificationGate;
+      data = state.notifications;
       if (state.notificationFailure) { await route.fulfill({ status: 503, json: { success: false, code: 'TEMPORARY', message: '互动服务暂不可用' } }); return; }
     }
     await route.fulfill({ json: { success: true, data } });
@@ -123,8 +126,19 @@ test('every feed entry refreshes independently and only visible feed subscribes'
   await expect(page.locator('.section-head').getByRole('button', { name: '刷新', exact: true })).toBeEnabled();
   await expect(page.locator('.activity-notices')).toContainText('互动服务暂不可用');
   await expect(page.getByRole('button', { name: '同学2 点赞了你的动态。' })).toBeVisible();
-  state.notificationFailure = false; await page.locator('.activity-notices').getByRole('button', { name: '重试' }).click();
-  await expect(page.locator('.activity-notices')).not.toContainText('互动服务暂不可用');
+  // Keep the server unavailable until the real retry click has happened. Flipping
+  // it first lets a legitimate foreground/socket refresh succeed and remove the
+  // retry control while Playwright is still checking its actionability.
+  let releaseRecovery!: () => void;
+  state.notificationGate = new Promise<void>(resolve => { releaseRecovery = resolve; });
+  const beforeRetry = state.notificationRequests;
+  try {
+    await page.locator('.activity-notices').getByRole('button', { name: '重试' }).click();
+    await expect.poll(() => state.notificationRequests).toBeGreaterThan(beforeRetry);
+    state.notificationFailure = false;
+    releaseRecovery();
+    await expect(page.locator('.activity-notices')).not.toContainText('互动服务暂不可用');
+  } finally { releaseRecovery(); state.notificationGate = undefined; }
 });
 
 test('logout discards old reminders and late socket deliveries', async ({ page }) => {

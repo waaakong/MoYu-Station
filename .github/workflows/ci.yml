@@ -155,14 +155,17 @@ jobs:
   unsigned-update-candidates:
     name: Unsigned Sandbox candidate ${{ matrix.version }}
     if: github.ref == 'refs/heads/codex/manifest-updates-ci-20261020'
-    needs: [secrets, workspace, backend]
+    # Synthetic Sandbox candidates are not a production release. Build alongside
+    # functional gates so real installer testing can proceed independently; the
+    # complete workflow and two zero-retry Linux passes remain release gates.
+    needs: [secrets]
     runs-on: windows-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        version: ['0.2.0-trial.20261020.3', '0.2.0-trial.20261020.4']
+        version: ['0.2.0-trial.20261020.5', '0.2.0-trial.20261020.6']
     env:
       STUDYROOM_SIGNING_MODE: manifest-signed
       STUDYROOM_UPDATE_CONTROL_ENABLED: 'true'
