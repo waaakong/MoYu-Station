@@ -135,6 +135,9 @@ jobs:
           sudo install -m 0644 deploy/nginx/studyroom-v2-candidate.conf /etc/nginx/conf.d/studyroom-v2-candidate.conf
           sudo install -m 0644 deploy/nginx/studyroom-v2.conf /etc/nginx/conf.d/studyroom-v2.conf
           sudo nginx -t
+          # Exercise update auth/asset locations too; a bare quantifier brace in
+          # an unquoted regex otherwise escapes the normal site-template gate.
+          sudo nginx -t -c "$PWD/deploy/nginx/test/client-updates.conf"
       - name: Build and scan production server artifacts
         run: |
           npm run build:web
