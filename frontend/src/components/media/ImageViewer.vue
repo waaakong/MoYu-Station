@@ -73,6 +73,16 @@ watch(() => JSON.stringify([props.images, props.initialIndex]), () => {
   index.value = Math.max(0, Math.min(props.images.length - 1, props.initialIndex));
 }, { immediate: true });
 watch(imageKey, reset, { immediate: true });
+watch(status, value => {
+  if (value === 'ready') return;
+  // Disabling the focused zoom/fit button blurs it to <body> in Chromium.
+  // Move focus before Vue patches disabled/removed controls, otherwise the next
+  // Arrow/Tab key never reaches this modal and rapid image navigation is lost.
+  const active = document.activeElement;
+  if (active instanceof HTMLButtonElement && active !== closeButton.value && dialog.value?.contains(active)) {
+    closeButton.value?.focus({ preventScroll: true });
+  }
+}, { flush: 'sync' });
 watch(() => status.value, value => {
   adjacentImages.forEach(image => image.removeAttribute("src"));
   adjacentImages = [];

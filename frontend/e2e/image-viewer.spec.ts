@@ -1,13 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 
-async function setup(page: Page) {
+async function setup(page: Page, holdSecondImage?: Promise<void>) {
   await page.routeWebSocket("**/*", socket => socket.close());
   let failImage = true;
   const images = await Promise.all([[2000, 1000], [600, 3000], [40, 20]].map(([width, height]) =>
     sharp({ create: { width, height, channels: 4, background: { r: 116, g: 143, b: 101, alpha: .8 } } }).png().toBuffer()));
-  await page.route("**/viewer-fixture-*.png", route => {
+  await page.route("**/viewer-fixture-*.png", async route => {
     const id = Number(route.request().url().match(/fixture-(\d)/)?.[1]);
+    if (id === 1 && holdSecondImage) await holdSecondImage;
     return id === 3 && failImage
       ? route.fulfill({ status: 503, body: "unavailable" })
       : route.fulfill({ contentType: "image/png", body: images[id === 3 ? 0 : id] });
@@ -77,6 +78,23 @@ test("load failure can retry, focus stays modal and returns to trigger without s
   await expect(page.getByRole("dialog", { name: "图片预览" })).toHaveCount(0);
   await expect(page.locator(".media-tile").first()).toBeFocused();
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+});
+
+test("keyboard navigation keeps modal focus when loading disables the focused image control", async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  try {
+    await setup(page, held);
+    await page.getByRole('button', { name: '实际大小', exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.viewer-header')).toContainText('2 / 4');
+    await expect(page.locator('.viewer-state')).toContainText('正在加载');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('dialog'))).toBe(true);
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.viewer-header')).toContainText('3 / 4');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('button', { name: '重试加载' })).toBeVisible();
+  } finally { release(); }
 });
 
 for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1080, height: 640 }, { width: 390, height: 844 }]) {
