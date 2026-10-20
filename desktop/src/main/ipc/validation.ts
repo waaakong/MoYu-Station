@@ -374,10 +374,18 @@ export const radioStationRequestSchema = z.object({
 export const externalUrlSchema = z.string().min(1).max(2_048);
 
 export const updaterAuthStateSchema = z.object({
-  authenticated: z.boolean()
+  authenticated: z.boolean(),
+  accountSession: z.string().min(1).max(160).optional()
 }).strict();
 
 export const updateActivityStateSchema = z.object({
   focusActive: z.boolean(),
-  audioActive: z.boolean()
+  audioActive: z.boolean(),
+  draftsActive: z.boolean().optional()
+}).strict();
+
+export const updatePreparationResultSchema = z.object({
+  id: z.uuid(), ready: z.boolean(),
+  rendererState: z.record(z.string().max(160).regex(/^studyroom[-:](?:focus|sound|player|scene|shell|memo|todo|entertainment|game|web-queue)[A-Za-z0-9:._-]*$/), z.string().max(1024 * 1024))
+    .refine(value => Object.keys(value).length <= 256 && JSON.stringify(value).length <= 8 * 1024 * 1024).optional()
 }).strict();

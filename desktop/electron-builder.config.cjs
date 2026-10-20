@@ -1,6 +1,7 @@
 const desktopPackage = require("./package.json");
 const { updateSigningConfig } = require('./scripts/update-signing-config.cjs');
 const updateSettings = updateSigningConfig();
+if (updateSettings.mode === 'manifest-signed') process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
 
 const allowedChannels = new Set(["stable", "beta", "provider-experimental"]);
 const channel = allowedChannels.has(process.env.STUDYROOM_UPDATE_CHANNEL)
@@ -39,6 +40,9 @@ module.exports = {
         rfc3161TimeStampServer: updateSettings.signing.timestampUrl
       }
     }
+  } : updateSettings.mode === 'manifest-signed' ? {
+    forceCodeSigning: false,
+    win: { ...desktopPackage.build.win, verifyUpdateCodeSignature: false }
   } : {}),
   artifactName: `MoYu-Setup-${channel === 'stable' ? '' : channel + '-'}\${version}-win-\${arch}.\${ext}`,
   directories: { ...desktopPackage.build.directories, output: `release/${channel}` },

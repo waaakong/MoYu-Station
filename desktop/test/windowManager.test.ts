@@ -30,7 +30,7 @@ let write: ReturnType<typeof vi.fn>;
 function create(behavior?: unknown) {
   saved = new Map([["window.close-behavior-v1", behavior]]);
   write = vi.fn((key, value) => saved.set(key, value));
-  manager = new MainWindowManager("preload", { getSetting: (key: string) => saved.get(key), setSetting: write } as any);
+  manager = new MainWindowManager("preload", { getSetting: (key: string) => saved.get(key), setSetting: write, isUpdateFrozen: () => false } as any);
   return manager;
 }
 beforeEach(() => { vi.useFakeTimers(); mocks.quit.mockClear(); });

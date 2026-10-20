@@ -44,7 +44,7 @@
       <SoundContextPanel class="sound-page__context" />
     </div>
 
-    <OverlayDialog :open="contextOpen" label="声音控制台" placement="right" @close="() => closeContext()">
+    <OverlayDialog :open="contextOpen" label="声音控制台" placement="right" @close="() => closeContext()" @closed="consoleButton?.focus({ preventScroll: true })">
       <SoundContextPanel class="sound-page__floating-console" closable @close="() => closeContext()" />
     </OverlayDialog>
     <OverlayDialog :open="providerAccountsOpen" label="平台音乐" placement="right" @close="providerAccountsOpen = false">
@@ -208,7 +208,7 @@ async function removeFromPlaylist(track: Track) { if (!selectedPlaylist.value ||
 async function toggleAmbient(sourceId: AmbientSourceId) { const existing = sound.settings.ambientTracks.find((track) => track.sourceId === sourceId); try { if (existing) sound.removeAmbient(existing.id); else await sound.addAmbient(sourceId); if (window.innerWidth < 1440) openContext(); } catch (reason) { const copy = reason instanceof Error && reason.message === "AMBIENT_TRACK_LIMIT" ? "最多同时开启 6 种环境声音，请先移除一条。" : message(reason, "环境声音没有启动，请稍后重试。"); shell.toast(copy, "error"); } }
 function openContext() { contextOpen.value = true; }
 async function closeStage() { stageOpen.value = false; await nextTick(); stageButton.value?.focus(); }
-function closeContext(restoreFocus = true) { contextOpen.value = false; if (restoreFocus) void nextTick(() => consoleButton.value?.focus()); }
+function closeContext() { contextOpen.value = false; }
 function message(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback; }
 function importMessage(result: { imported: number; addedLocations: number; updated: number; failed: number; metadataWarnings: number; limitReached: boolean }) { return `曲库已更新：新增 ${result.imported}${result.addedLocations ? `，合并副本 ${result.addedLocations}` : ""}，更新 ${result.updated}${result.failed ? `，失败 ${result.failed}` : ""}${result.metadataWarnings ? `，${result.metadataWarnings} 首使用文件名信息` : ""}${result.limitReached ? "，已达到导入上限" : ""}`; }
 async function importFiles() { if (!window.studyRoomDesktop || scanning.value) return; scanning.value = true; try { const result = await window.studyRoomDesktop.selectAndImportMusicFiles(); if (!result.canceled) { await loadLibrary(); shell.toast(importMessage(result), result.failed ? "info" : "success"); } } catch (reason) { error.value = message(reason, "文件导入没有完成"); } finally { scanning.value = false; } }

@@ -6,6 +6,18 @@ const configured=()=>({STUDYROOM_UPDATE_CONTROL_ENABLED:'1',STUDYROOM_UPDATE_PUB
 test('ordinary builds remain disabled',()=>{const c=updateSigningConfig({});assert.equal(c.installEnabled,false);assert.equal(c.controlEnabled,false);});
 test('legacy test boolean cannot enable installation',()=>assert.throws(()=>updateSigningConfig({STUDYROOM_UPDATE_TEST_SIGNED:'1'}),/LEGACY/));
 test('control-only build does not imply signed installer',()=>{const e=configured();delete e.STUDYROOM_SIGNING_MODE;assert.equal(updateSigningConfig(e).installEnabled,false);});
+
+test('manifest-signed explicitly enables installation only with authenticated control and pinned Ed25519 keys',()=>{
+ const env={...configured(),STUDYROOM_SIGNING_MODE:'manifest-signed'};
+ const c=updateSigningConfig(env);assert.equal(c.mode,'manifest-signed');assert.equal(c.installEnabled,true);assert.equal(c.signing,undefined);
+ for(const patch of [{STUDYROOM_UPDATE_CONTROL_ENABLED:'0'},{STUDYROOM_UPDATE_PUBLIC_KEYS_JSON:'{}'},{CSC_LINK:'fixture.pfx'}])assert.throws(()=>updateSigningConfig({...env,...patch}));
+});
+
+test('manifest-signed builder omits Windows publisher trust without changing the trusted signing mode',()=>{
+ const env={...process.env,...configured(),STUDYROOM_SIGNING_MODE:'manifest-signed'};delete env.CSC_LINK;delete env.WIN_CSC_LINK;delete env.STUDYROOM_UPDATE_TEST_SIGNED;
+ const text=execFileSync(process.execPath,['-e',"console.log(JSON.stringify(require('./desktop/electron-builder.config.cjs')))"],{cwd:require('node:path').resolve(__dirname,'..'),env,encoding:'utf8'});
+ const c=JSON.parse(text);assert.equal(c.forceCodeSigning,false);assert.equal(c.win.verifyUpdateCodeSignature,false);assert.equal(c.win.signtoolOptions,undefined);
+});
 test('rejects missing signing identity, certificate and timestamp',()=>{for(const k of ['STUDYROOM_SIGNING_PUBLISHER','STUDYROOM_SIGNING_CERT_SHA1','STUDYROOM_SIGNING_TIMESTAMP_URL']){const e=configured();delete e[k];assert.throws(()=>updateSigningConfig(e),/SIGNING_/);}});
 test('rejects malformed and non-Ed25519 manifest keys',()=>{for(const key of ['', '{}','[]',JSON.stringify({test:'bad'}),JSON.stringify({test:generateKeyPairSync('rsa',{modulusLength:2048}).publicKey.export({format:'der',type:'spki'}).toString('base64')})])assert.throws(()=>updateSigningConfig({...configured(),STUDYROOM_UPDATE_PUBLIC_KEYS_JSON:key}),/PUBLIC_KEYS/);});
 test('binds cloud, API and update HTTPS origins',()=>{for(const fields of [{STUDYROOM_UPDATE_ORIGIN:'http://moyustation.xyz'},{STUDYROOM_UPDATE_API_BASE_URL:'https://elsewhere.test/api'},{STUDYROOM_UPDATE_API_BASE_URL:'https://moyustation.xyz/api?secret=no'},{STUDYROOM_UPDATE_ORIGIN:'https://moyustation.xyz/other'}])assert.throws(()=>updateSigningConfig({...configured(),...fields}),/ORIGIN/);});

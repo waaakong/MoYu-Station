@@ -9,10 +9,13 @@ import { useSoundStore } from "../stores/sound";
 import { useEntertainmentStore } from "../stores/entertainment";
 
 const savers = new Set<() => Promise<void>>();
-export function registerQuitSaver(save: () => Promise<void>) {
+const recoverers = new Set<() => void>();
+export function registerQuitSaver(save: () => Promise<void>, recover?: () => void) {
   savers.add(save);
-  return () => { savers.delete(save); };
+  if (recover) recoverers.add(recover);
+  return () => { savers.delete(save); if (recover) recoverers.delete(recover); };
 }
+export function recoverLocalQuit() { for (const recover of recoverers) recover(); }
 export function hasVolatileWork(): boolean {
   return Boolean(chatMemory.hallDraft || Object.values(chatMemory.privateDrafts).some(Boolean)
     || chatMemory.pending.length || pendingStickers.length || feedSession.draft.content

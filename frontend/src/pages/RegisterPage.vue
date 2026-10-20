@@ -226,6 +226,8 @@ async function submitRegister() {
       unconfirmed.value = true; clearSecrets();
       message.value = '注册结果尚未确认，账号可能已创建。请先前往登录核对，不要重复提交邀请码。'; return;
     }
+    // Re-enable fields before focusing the actionable error; disabled inputs cannot receive focus.
+    isSubmitting.value = false;
     const invitationErrors = new Set(["INVITATION_REQUIRED", "INVITATION_INVALID", "INVITATION_EXPIRED", "INVITATION_EXHAUSTED", "INVITATION_DISABLED"]);
     if (invitationErrors.has(error?.code)) {
       fieldErrors.invitationCode = error?.message || "邀请码不可用。";

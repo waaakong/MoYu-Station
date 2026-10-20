@@ -3,12 +3,14 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
+  writeFileSync,
   rmSync,
   statSync,
   unlinkSync
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {CLASSIC_GAME_IDS,isClassicGame} from '@studyroom/contracts';
 import { DatabaseSync } from "node:sqlite";
 import type {
@@ -224,7 +226,43 @@ export function initializeLocalDatabase(
 }
 
 export class LocalDatabaseStore {
+  private updateFrozen = false;
   constructor(private readonly database: DatabaseSync) {}
+
+  isUpdateFrozen(): boolean { return this.updateFrozen; }
+
+  /** Main-process only. VACUUM INTO includes committed WAL contents; raw file copy does not.
+   * The caller must finish renderer saves and reject concurrent IPC before calling this.
+   * No restore is automatic: a later application rollback must retain new user data. */
+  prepareUpdateBackup(directory: string, rendererState: Record<string, string>): { path: string; release(): void } {
+    if (this.updateFrozen) throw new Error('UPDATE_SAVE_UNAVAILABLE');
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const destination = join(directory, `update-${randomUUID()}.sqlite`);
+    let probe: DatabaseSync | undefined;
+    try {
+      this.database.prepare('VACUUM INTO ?').run(destination);
+      probe = new DatabaseSync(destination, { readOnly: true });
+      const row = probe.prepare('PRAGMA integrity_check').get() as { integrity_check?: string };
+      if (row.integrity_check !== 'ok' || readUserVersion(probe) !== readUserVersion(this.database)) throw new Error('UPDATE_BACKUP_INVALID');
+      probe.close(); probe = undefined;
+      const bytes = readFileSync(destination);
+      writeFileSync(`${destination}.json`, JSON.stringify({ schema: 1, databaseSha256: createHash('sha256').update(bytes).digest('hex'),
+        databaseSize: bytes.length, rendererState }), { flag: 'wx', mode: 0o600 });
+      // Sync backup + freeze are one main-thread critical section with no await gap.
+      this.database.exec('PRAGMA query_only = ON');
+      this.updateFrozen = true;
+      let released = false;
+      return { path: destination, release: () => {
+        if (released) return;
+        this.database.exec('PRAGMA query_only = OFF');
+        this.updateFrozen = false; released = true;
+      } };
+    } catch (error) {
+      probe?.close();
+      // Retain partial evidence locally for recovery; do not overwrite or delete originals.
+      throw error;
+    }
+  }
 
   close(): void {
     this.database.close();

@@ -1247,7 +1247,7 @@ onBeforeUnmount(() => {
 @media(max-width:800px){.ui-layer{grid-template-rows:auto auto;align-content:start;padding:20px 16px}.focus-stack{justify-self:center}.focus-controls{padding:12px}.sound-control{margin-left:0;flex-wrap:wrap}.memo-tab{top:auto;bottom:24px;transform:none}.memo-panel{right:12px;width:calc(100% - 24px)}}
 
 .player__audio-group{flex:1 1 400px;max-width:490px}.player__scene-group{flex:0 1 auto}
-.focus-controls{min-height:min-content;align-self:end}
+.focus-controls{min-height:min-content;align-self:end;align-items:flex-start}
 .ui-layer{display:flex;flex-direction:column;align-items:flex-start}
 .focus-stack{flex:0 0 auto;margin-block:auto;align-self:flex-start}
 .focus-controls{flex:0 0 auto;align-self:center}

@@ -53,11 +53,22 @@ export async function verifyReleaseDirectory(directory, publicKeys) {
 /** CI only: token is used solely on api.github.com and is stripped on asset redirects. */
 export async function verifyGithubDraft(directory, manifest, token, fetcher = fetch) {
   if (manifest.schemaVersion !== 2 || !token) throw new Error('UPDATE_RELEASE_GITHUB_CONFIG_REQUIRED');
-  const api = `https://api.github.com/repos/${manifest.github.repository}/releases/tags/${manifest.github.tag}`;
   const headers = {Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
-  const response = await fetcher(api,{headers,redirect:'error',signal:AbortSignal.timeout(30_000)});
-  if (!response.ok) throw new Error(`UPDATE_RELEASE_API_HTTP_${response.status}`);
-  const release = await response.json();
+  // Drafts are not reliably returned by the tag endpoint. Enumerate authenticated
+  // releases and reject ambiguous tags, including any already-published release.
+  const matches = [];
+  for (let page = 1; ; page++) {
+    if (page > 100) throw new Error('UPDATE_RELEASE_LIST_LIMIT');
+    const api = `https://api.github.com/repos/${manifest.github.repository}/releases?per_page=100&page=${page}`;
+    const response = await fetcher(api,{headers,redirect:'error',signal:AbortSignal.timeout(30_000)});
+    if (!response.ok) throw new Error(`UPDATE_RELEASE_API_HTTP_${response.status}`);
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length > 100) throw new Error('UPDATE_RELEASE_LIST_INVALID');
+    matches.push(...rows.filter(row => row?.tag_name === manifest.github.tag));
+    if (rows.length < 100) break;
+  }
+  if (matches.length !== 1) throw new Error('UPDATE_RELEASE_NOT_EXACT_DRAFT');
+  const release = matches[0];
   if (!release.draft || release.tag_name !== manifest.github.tag || !Array.isArray(release.assets)) throw new Error('UPDATE_RELEASE_NOT_EXACT_DRAFT');
   const expected = [...manifest.files];
   for (const name of ['release.json','release.json.sig']) {

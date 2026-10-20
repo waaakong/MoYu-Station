@@ -2,7 +2,7 @@
   <Teleport to="body">
     <dialog ref="dialog" class="sr-overlay-dialog" :class="`sr-overlay-dialog--${placement}`"
       :aria-label="label" :role="alert ? 'alertdialog' : 'dialog'"
-      @cancel.prevent.stop="emit('close')" @click.self="emit('close')">
+      @cancel.prevent.stop="emit('close')" @click.self="emit('close')" @close="!dialog?.open && emit('closed')">
       <slot v-if="rendered" />
     </dialog>
   </Teleport>
@@ -13,7 +13,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { closeMotionDialog, openMotionDialog } from '../../motion/runtime';
 import { useAuthStore } from '../../stores/auth';
 const props = withDefaults(defineProps<{ open: boolean; label: string; placement?: 'center' | 'right'; alert?: boolean }>(), { placement: 'center' });
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; closed: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const rendered = ref(props.open);
 const auth = useAuthStore();

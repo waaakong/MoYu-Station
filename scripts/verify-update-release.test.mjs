@@ -40,13 +40,15 @@ test('draft verification binds all assets and strips the GitHub token on CDN red
     const calls = [];
     const fetcher = async (url,init) => {
       calls.push({url,headers:init.headers});
-      if (url.includes('/releases/tags/')) return new Response(JSON.stringify({draft:true,tag_name:'v1.2.3',assets:names.map((name,i)=>({name,id:i+1,size:bytes[i].length,state:'uploaded'}))}));
+      if (url.includes('/releases?')) return new Response(JSON.stringify([{draft:true,tag_name:'v1.2.3',assets:names.map((name,i)=>({name,id:i+1,size:bytes[i].length,state:'uploaded'}))}]));
       if (url.startsWith('https://api.github.com/')) return new Response(null,{status:302,headers:{location:`https://release-assets.githubusercontent.com/github-production-release-asset/123/${url.split('/').at(-1)}`}});
       return new Response(bytes[Number(url.split('/').at(-1))-1]);
     };
     await verifyGithubDraft(f.directory,f.envelope.manifest,'synthetic-ci-token',fetcher);
     assert.equal(calls.filter(c=>c.url.startsWith('https://release-assets.')).length,names.length);
     for (const call of calls.filter(c=>c.url.startsWith('https://release-assets.'))) assert.deepEqual(call.headers,{});
-    await assert.rejects(()=>verifyGithubDraft(f.directory,f.envelope.manifest,'fixture',async()=>new Response(JSON.stringify({draft:false,tag_name:'v1.2.3',assets:[]}))),/NOT_EXACT_DRAFT/);
+    assert.equal(calls.some(call => call.url.includes('/releases/tags/')), false);
+    await assert.rejects(()=>verifyGithubDraft(f.directory,f.envelope.manifest,'fixture',async()=>new Response(JSON.stringify([{draft:false,tag_name:'v1.2.3',assets:[]}]))),/NOT_EXACT_DRAFT/);
+    await assert.rejects(()=>verifyGithubDraft(f.directory,f.envelope.manifest,'fixture',async()=>new Response(JSON.stringify([{draft:true,tag_name:'v1.2.3',assets:[]},{draft:true,tag_name:'v1.2.3',assets:[]}]))),/NOT_EXACT_DRAFT/);
   } finally { await rm(f.directory,{recursive:true,force:true}); }
 });

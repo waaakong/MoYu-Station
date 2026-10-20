@@ -1,5 +1,6 @@
 <template>
   <DesktopWindowHost />
+  <UpdateLifecycleHost />
   <MessageNotificationHost />
   <DesktopShell v-if="usesDesktopShell">
     <RouterView v-slot="{ Component }" :key="pageSessionKey">
@@ -23,6 +24,7 @@ import { useRoute, useRouter } from "vue-router";
 import DesktopShell from "./layouts/DesktopShell.vue";
 import AppTitlebar from './components/window/AppTitlebar.vue';
 import DesktopWindowHost from './components/window/DesktopWindowHost.vue';
+import UpdateLifecycleHost from './components/window/UpdateLifecycleHost.vue';
 import MessageNotificationHost from './components/states/MessageNotificationHost.vue';
 import { startMessageNotifications } from './notifications/runtime';
 import { usePageMotion } from './composables/usePageMotion';
@@ -171,7 +173,7 @@ onMounted(async () => {
     if (!isDesktop) shellStore.toast('本地初始化未完成，请刷新后重试。', 'error');
     return;
   }
-  void updatesStore.initialize(authStore.isLoggedIn).catch(() => { /* Update status owns its error state. */ });
+  void updatesStore.initialize(authStore.isLoggedIn, authStore.user ? `${authStore.user.id}:${authStore.sessionGeneration}` : undefined).catch(() => { /* Update status owns its error state. */ });
   sendHeartbeat();
   heartbeatTimer = window.setInterval(sendHeartbeat, 15000);
 });
@@ -193,14 +195,14 @@ watch(
 );
 
 watch(
-  () => authStore.isLoggedIn,
-  (authenticated) => { void updatesStore.setAuthenticated(authenticated); }
+  () => [authStore.isLoggedIn, authStore.user?.id, authStore.sessionGeneration],
+  ([authenticated, userId, generation]) => { void updatesStore.setAuthenticated(authenticated, userId ? `${userId}:${generation}` : undefined); }
 );
 
 watch(
-  () => [focusActive.value, audioActive.value],
-  ([focus, audio]) => { void updatesStore.setActivity(Boolean(focus), Boolean(audio)); },
-  { immediate: true }
+  () => [focusActive.value, audioActive.value, hasVolatileWork()],
+  ([focus, audio, drafts]) => { void updatesStore.setActivity(Boolean(focus), Boolean(audio), Boolean(drafts)); },
+  { immediate: true, flush: 'sync' }
 );
 
 watch(

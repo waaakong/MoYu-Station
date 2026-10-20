@@ -55,8 +55,22 @@ const appearanceButton = ref<HTMLButtonElement>();
 const accountButton = ref<HTMLButtonElement>();
 const accountArea = ref<HTMLElement>();
 const accountOpen = ref(false);
-async function openAccount() { accountOpen.value = true; await nextTick(); accountArea.value?.querySelector<HTMLElement>('.account-panel a')?.focus(); }
-function closeAccount(restore = true) { accountOpen.value = false; if (restore) accountButton.value?.focus(); }
+async function openAccount() {
+  accountOpen.value = true;
+  await nextTick();
+  if (!accountOpen.value) return;
+  const panel = accountArea.value?.querySelector<HTMLElement>('.account-panel');
+  if (panel) { panel.inert = false; panel.removeAttribute('aria-hidden'); }
+  panel?.querySelector<HTMLElement>('a')?.focus();
+}
+function closeAccount(restore = true) {
+  // v-if retains the outgoing VNode during a leave animation, including its old
+  // inert=false prop. Remove it from keyboard/accessibility immediately, not 150ms later.
+  const panel = accountArea.value?.querySelector<HTMLElement>('.account-panel');
+  if (panel) { panel.inert = true; panel.setAttribute('aria-hidden', 'true'); }
+  accountOpen.value = false;
+  if (restore) accountButton.value?.focus();
+}
 function toggleAccount() { if (accountOpen.value) closeAccount(); else void openAccount(); }
 function outside(event: PointerEvent) { if (!accountArea.value?.contains(event.target as Node)) closeAccount(false); }
 function keyboard(event: KeyboardEvent) { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeAccount(); } }

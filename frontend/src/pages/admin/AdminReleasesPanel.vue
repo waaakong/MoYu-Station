@@ -70,7 +70,7 @@ let trigger:HTMLElement|null=null;
 const memberConfirmation=ref<HTMLElement|null>(null);let memberTrigger:HTMLElement|null=null;
 watch(()=>admin.membershipIntent,async(value,old)=>{if(value&&!old){memberTrigger=document.activeElement as HTMLElement;await nextTick();memberConfirmation.value?.focus();}});
 async function cancelMember(){admin.cancelMembership();await nextTick();if(memberTrigger?.isConnected)memberTrigger.focus();}
-const actions:{label:string;status:ClientRelease['status'];percentage:number}[]=[{label:'试投放',status:'PILOT',percentage:0},{label:'10%',status:'ROLLING',percentage:10},{label:'30%',status:'ROLLING',percentage:30},{label:'全量',status:'FULL',percentage:100},{label:'暂停',status:'PAUSED',percentage:0},{label:'撤回',status:'WITHDRAWN',percentage:0}];
+const actions:{label:string;status:ClientRelease['status'];percentage:number}[]=[{label:'试投放',status:'PILOT',percentage:0},{label:'10%',status:'ROLLING',percentage:10},{label:'30%',status:'ROLLING',percentage:30},{label:'50%',status:'ROLLING',percentage:50},{label:'全量',status:'FULL',percentage:100},{label:'暂停',status:'PAUSED',percentage:0},{label:'撤回',status:'WITHDRAWN',percentage:0}];
 function allowed(release:ClientRelease,status:ClientRelease['status']) {
   if(!admin.releasePolicyEnabled || release.policyVersion==null || release.status==='WITHDRAWN' || admin.releaseIntent)return false;
   return status===release.status || status==='PAUSED' || status==='WITHDRAWN' || release.status==='DRAFT'&&status==='PILOT' || ['PILOT','ROLLING','PAUSED'].includes(release.status)&&['PILOT','ROLLING','FULL'].includes(status) && !(release.status==='ROLLING'&&status==='PILOT');

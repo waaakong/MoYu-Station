@@ -1,6 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 const ok=(data:unknown)=>({success:true,code:'OK',data});
 async function fixture(page:Page){
+  await page.routeWebSocket('**/ws/chat', socket => { socket.onMessage(() => {}); });
   const calls:any[]=[],queries:string[]=[];let feedback={id:'2104509220480131074',author:'隔离成员',title:'播放建议',content:'这是隔离接口数据，不会修改真实反馈。',status:'PENDING',adminVersion:'0',createdAt:'2026-09-29 10:00'};
   const user=(id:string,type='NORMAL')=>({id,username:'member-'+id,nickname:type==='MUTED'?'服务端筛选结果':'成员 '+id,userType:type,adminVersion:'0',todayFocusMinutes:20});
   const logs:string[]=[];page.on('pageerror',e=>logs.push(e.message));page.on('console',m=>{if(['error','warning'].includes(m.type()))logs.push(m.text());});

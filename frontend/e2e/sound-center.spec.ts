@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/**', route => route.fulfill({ json: { success: true, data: null } }));
   await page.addInitScript(() => {
     const tracks = [
       { id: "track-1", title: "Autumn Window", artist: "Local Artist", album: "Quiet Hours", durationMs: 183000, source: { kind: "local", fileToken: "00000000-0000-4000-8000-000000000001" } },
@@ -41,6 +42,7 @@ test.beforeEach(async ({ page }) => {
       logoutProvider: async () => undefined,
       prepareProviderPlayback: async () => ({ sourceKind: "provider", providerId: "netease", trackId: "1", mediaToken: "b".repeat(64), supportsRange: true }),
       onSourceSwitch: () => () => undefined,
+      onDesktopLifecycle: () => () => undefined,
       onProviderStatusChanged: () => () => undefined,
       onProviderSearchProgress: () => () => undefined,
       setUpdaterActivityState: async () => ({ state: 'disabled' }), setUpdaterAuthState: async () => ({ state: 'disabled' }), onUpdateStatus: () => () => undefined
@@ -49,6 +51,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('provider playlists page, queue the selected collection, and clear after logout', async ({page}) => {
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { success: true, data: { id: '2', username: 'fixture-member', userType: 'NORMAL' } } }));
+  await page.routeWebSocket('**/ws/chat', socket => { socket.onMessage(() => {}); });
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(()=>{
     const bridge=window.studyRoomDesktop!;let signedIn=true;
@@ -70,11 +74,11 @@ test('provider playlists page, queue the selected collection, and clear after lo
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {testQueue:{track:{id:string}}[]}).testQueue?.[0]?.track.id)).toBe('netease:1');
   await page.getByRole('button',{name:'我喜欢的',exact:true}).last().click();
   await expect(page.getByText('还没有曲目',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'打开实验音乐平台'}).click();
-  await page.getByRole('dialog',{name:'实验音乐平台'}).getByRole('button',{name:'退出',exact:true}).click();
-  await page.getByRole('button',{name:'关闭实验音乐平台'}).click();
+  await page.getByRole('button',{name:'打开平台音乐'}).click();
+  await page.getByRole('dialog',{name:'平台音乐',exact:true}).getByRole('button',{name:'退出',exact:true}).click();
+  await page.getByRole('button',{name:'关闭平台音乐'}).click();
   await page.getByRole('button',{name:'我的歌单',exact:true}).click();
-  await expect(page.getByText('登录后查看私人音乐库',{exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'平台音乐登录引导'})).toContainText('连接音乐平台');
   await expect(page.getByRole('list',{name:'平台歌单'})).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -122,14 +126,14 @@ for (const [width,height] of [[1440,900],[1280,720],[1080,640],[390,844]]) {
     await page.setViewportSize({width,height});
     await page.goto('/#/sound');
     await expect(page.getByRole('heading',{name:'声音',exact:true})).toBeVisible();
-    const trigger=page.getByRole('button',{name:'打开实验音乐平台'});
+    const trigger=page.getByRole('button',{name:'打开平台音乐'});
     await trigger.click();
-    const modal=page.getByRole('dialog',{name:'实验音乐平台',exact:true});
+    const modal=page.getByRole('dialog',{name:'平台音乐',exact:true});
     await expect(modal).toBeVisible();
     expect(await modal.boundingBox()).toEqual({x:0,y:0,width,height});
     expect(await modal.evaluate(el=>({top:el.matches(':modal'),body:el.parentElement===document.body,
       corners:[[1,1],[innerWidth-1,1],[1,innerHeight-1],[innerWidth-1,innerHeight-1]].every(([x,y])=>document.elementFromPoint(x,y)===el)}))).toEqual({top:true,body:true,corners:true});
-    const close=modal.getByRole('button',{name:'关闭实验音乐平台'});
+    const close=modal.getByRole('button',{name:'关闭平台音乐'});
     const centered=await close.evaluate(el=>{const b=el.getBoundingClientRect(),s=el.querySelector('svg')!.getBoundingClientRect();return Math.abs(b.x+b.width/2-s.x-s.width/2)<1&&Math.abs(b.y+b.height/2-s.y-s.height/2)<1;});
     expect(centered).toBe(true);
     await page.keyboard.press('Escape');await expect(modal).toBeHidden();await expect(trigger).toBeFocused();
@@ -157,13 +161,15 @@ test("sound center keeps the three-column desktop layout inside the viewport", a
 });
 
 test("sound center exposes audited radio and honest provider states", async ({ page }) => {
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { success: true, data: { id: '2', username: 'fixture-member', userType: 'NORMAL' } } }));
+  await page.routeWebSocket('**/ws/chat', socket => { socket.onMessage(() => {}); });
   await page.goto("/#/sound");
   await page.getByRole("button", { name: /公开电台/ }).click();
   await expect(page.getByRole("region", { name: "公开电台目录" })).toBeVisible();
   await expect(page.getByRole("button", { name: "播放电台 Groove Salad" })).toContainText("Quiet Rain");
 
-  await page.getByRole("button", { name: "打开实验音乐平台" }).click();
-  const dialog = page.getByRole("dialog", { name: "实验音乐平台" });
+  await page.getByRole("button", { name: "打开平台音乐" }).click();
+  const dialog = page.getByRole("dialog", { name: "平台音乐", exact: true });
   await expect(dialog).toContainText("非网易云音乐、QQ 音乐或酷狗音乐官方客户端");
   await expect(dialog).toContainText("外部阻断");
   await expect(dialog.getByRole("button", { name: "登录" })).toHaveCount(0);

@@ -320,7 +320,7 @@ async function startApplication(): Promise<void> {
         readAutomaticChecks: () => databaseStore?.getSetting<boolean>('updater-automatic-checks-v1'),
         writeAutomaticChecks: value => databaseStore?.setSetting('updater-automatic-checks-v1', value),
       writeDeferUntil: (value) => {
-        databaseStore?.setSetting("updater-defer-until-v1", value ?? 0);
+        if (!databaseStore?.isUpdateFrozen()) databaseStore?.setSetting("updater-defer-until-v1", value ?? 0);
         updateDeferUntil = value;
       }
     },
@@ -344,8 +344,10 @@ async function startApplication(): Promise<void> {
     providerArtwork,
     bindProviderAccount: id => providerAccess.bind(id),
     updater: updateManager,
-    localProfile
+    localProfile,
+    updateBackupDirectory: join(app.getPath('userData'), 'update-backups')
   });
+  windowManager.window.on('close', () => updateManager?.cancelForNormalQuit());
 
   for (const root of databaseStore.listEnabledLibraryRootEntries()) {
     const started = directoryWatchManager.start(root);
@@ -428,6 +430,7 @@ if (!gotSingleInstanceLock) {
 
 app.on("activate", () => windowManager?.show());
 app.on("before-quit", () => {
+  updateManager?.cancelForNormalQuit();
   desktopMusic?.dispose();desktopMusic=undefined;
   windowManager?.setQuitting(true);
   unregisterIpc?.();
@@ -443,6 +446,6 @@ app.on("will-quit", () => {
   desktopMusic?.dispose();
   globalShortcut.unregisterAll();
   tray?.destroy();
-  databaseStore?.close();
   updateManager?.dispose(true);
+  databaseStore?.close();
 });

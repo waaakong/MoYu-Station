@@ -14,6 +14,8 @@ import { verifyFeedResponse, verifyUpdateInfo, verifyDownloadedInstaller } from 
 import { compareReleaseVersions, parsePublicDownloadRelease } from './manualVersionCheck';
 import { canFallbackToServer, fetchUpdateFeed, isGithubFeed } from './updateTransport';
 import { installUpdateNetworkGuard } from './updateNetworkGuard';
+import { createHash } from 'node:crypto';
+import { UpdateIntent, type UpdateTarget, type UpdateIntentView } from './updateIntent';
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CHECK_JITTER_MS = 15 * 60 * 1000;
@@ -24,6 +26,7 @@ const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 5 * 60_
 export interface UpdateManagerConfig {
   controlEnabled: boolean;
   installEnabled: boolean;
+  trustMode?: 'disabled' | 'trusted' | 'manifest-signed';
   channel: UpdateChannel;
   apiBaseUrl: string;
   updateOrigin: string;
@@ -62,6 +65,7 @@ function initialStatus(config: UpdateManagerConfig): UpdateStatus {
 
 export class UpdateManager {
   private status: UpdateStatus;
+  private revision = 0;
   private authenticated = false;
   private activity: UpdateActivityState = { focusActive: false, audioActive: false };
   private checkPromise?: Promise<UpdateStatus>;
@@ -85,6 +89,29 @@ export class UpdateManager {
   private installPromise?: Promise<void>;
   private automaticChecks: boolean;
   private installStarted = false;
+  private accountSession?: string;
+  private downloadedFiles?: string[];
+  private prepareInstallation?: (signal: AbortSignal) => Promise<() => void>;
+  private readonly intent: UpdateIntent;
+  private intentView: UpdateIntentView = { phase: 'idle', waitReasons: [] };
+
+  /** The host must bind the shared renderer save + native consistency backup first. */
+  setInstallPreparation(prepare: (signal: AbortSignal) => Promise<() => void>) { this.prepareInstallation = prepare; }
+  cancelForNormalQuit(): void { if (!this.installStarted) this.intent.cancel(); }
+
+  private intentTarget(): UpdateTarget | undefined {
+    if (!this.authenticated || !this.accountSession || !this.offer) return undefined;
+    return { accountSession: `${this.generation}:${this.accountSession}`, version: this.offer.availableVersion,
+      manifestDigest: createHash('sha256').update(this.offer.manifestJson).digest('hex') };
+  }
+
+  async start(): Promise<UpdateStatus> {
+    if (!this.config.installEnabled || !this.prepareInstallation) throw new Error('UPDATE_SAVE_UNAVAILABLE');
+    if (!this.offer || !this.intentTarget()) throw new Error('UPDATE_NOT_AVAILABLE');
+    this.persistence.writeDeferUntil(undefined);
+    await this.intent.start();
+    return this.snapshot();
+  }
 
   private current(generation: number): boolean {
     return !this.disposed && this.authenticated && generation === this.generation;
@@ -98,10 +125,11 @@ export class UpdateManager {
   private canInstall(): boolean {
     return !this.installStarted && this.config.installEnabled && this.current(this.generation) && this.downloaded && !!this.updater &&
       !!this.offer && Date.parse(this.offer.accessTokenExpiresAt) > Date.now() && !this.deferred() &&
-      !this.activity.focusActive && !this.activity.audioActive && this.status.state !== 'checking';
+      !this.activity.focusActive && !this.activity.audioActive && !this.activity.draftsActive && this.status.state !== 'checking';
   }
 
   private clearOffer(): void {
+    this.intent?.cancel();
     this.bindingController?.abort();
     this.bindingController = undefined;
     // The library keeps its quit handler on app, not on the updater EventEmitter.
@@ -114,6 +142,7 @@ export class UpdateManager {
     this.downloadCancellation = undefined;
     this.offer = undefined;
     this.downloaded = false;
+    this.downloadedFiles = undefined;
     this.removeNetworkGuard?.();
     this.removeNetworkGuard = undefined;
   }
@@ -141,10 +170,45 @@ export class UpdateManager {
   ) {
     this.status = initialStatus(config);
     this.automaticChecks = persistence.readAutomaticChecks?.() !== false;
+    this.intent = new UpdateIntent({
+      currentTarget: () => this.intentTarget(),
+      download: async signal => {
+        await this.download();
+        signal.throwIfAborted();
+        if (!this.downloaded) throw new Error(this.status.errorCode || 'UPDATE_NOT_DOWNLOADED');
+      },
+      revalidate: async signal => { await this.check(true); signal.throwIfAborted(); },
+      prepare: signal => {
+        if (!this.prepareInstallation) throw new Error('UPDATE_SAVE_UNAVAILABLE');
+        return this.prepareInstallation(signal);
+      },
+      verifyArtifact: async signal => {
+        if (!this.offer || !this.downloadedFiles) throw new Error('UPDATE_NOT_DOWNLOADED');
+        await verifyDownloadedInstaller(this.downloadedFiles, this.offer.manifest, signal);
+      },
+      install: async () => {
+        if (!this.canInstall() || !this.updater) throw new Error('UPDATE_NOT_DOWNLOADED');
+        this.installStarted = true;
+        this.transition({ state: 'installing', message: '正在退出并安装更新，完成后将重新启动。', canRetry: false });
+        this.updater.quitAndInstall(true, true);
+      },
+      changed: view => {
+        this.intentView = view;
+        if (view.phase === 'error') this.fail(new Error(view.error || 'UPDATE_INSTALL_FAILED'));
+        else if (['countdown', 'preparing'].includes(view.phase)) this.transition({ state: view.phase as 'countdown' | 'preparing',
+          message: view.phase === 'countdown' ? `${view.countdownSeconds} 秒后保存并重启，可取消。` : '正在保存并备份本机数据…' });
+        else if (view.phase === 'waiting') this.transition({ state: 'scheduled', message: '更新已下载，等待专注、播放和未保存草稿处理完成。' });
+        else this.transition({});
+      }
+    });
   }
 
-  snapshot(): UpdateStatus { return { ...this.status, canInstall: this.canInstall(),
+  snapshot(): UpdateStatus { return { ...this.status, revision: this.revision, canInstall: this.canInstall(),
     downloadSource: this.offer ? (isGithubFeed(this.offer.manifest, this.offer.feedUrl) ? 'github' : 'server') : undefined,
+    trustMode: this.config.trustMode ?? 'disabled',
+    oneClickEnabled: this.config.installEnabled && !!this.prepareInstallation,
+    updateIntent: !['idle', 'error'].includes(this.intentView.phase),
+    waitReasons: this.intentView.waitReasons, countdownSeconds: this.intentView.countdownSeconds,
     automaticUpdates: this.config.controlEnabled, automaticChecks: this.automaticChecks, installEnabled: this.config.installEnabled }; }
 
   setAutomaticChecks(enabled: boolean): UpdateStatus {
@@ -159,6 +223,8 @@ export class UpdateManager {
 
   async setAuthState(input: UpdaterAuthState): Promise<UpdateStatus> {
     if (this.disposed) return this.snapshot();
+    if (input.accountSession !== this.accountSession) this.invalidateSession();
+    this.accountSession = input.accountSession;
     this.authenticated = input.authenticated;
     if (!this.authenticated) {
       this.invalidateSession();
@@ -189,7 +255,9 @@ export class UpdateManager {
 
   setActivityState(input: UpdateActivityState): UpdateStatus {
     if (this.disposed) return this.snapshot();
-    this.activity = { focusActive: input.focusActive, audioActive: input.audioActive };
+    this.activity = { focusActive: input.focusActive, audioActive: input.audioActive, draftsActive: input.draftsActive };
+    this.intent.setBusy({ focus: input.focusActive, audio: input.audioActive, drafts: Boolean(input.draftsActive) });
+    if (this.snapshot().updateIntent) return this.snapshot();
     if (this.status.state === "downloaded" && (this.activity.focusActive || this.activity.audioActive)) {
       return this.transition({ state: "scheduled", message: "更新已下载，专注和播放结束后可安装。" });
     }
@@ -224,7 +292,7 @@ export class UpdateManager {
   }
 
   cancelDownload(): UpdateStatus {
-    if (this.status.state !== 'downloading') return this.snapshot();
+    if (this.status.state !== 'downloading' && !this.snapshot().updateIntent) return this.snapshot();
     this.cancelled = true;
     this.clearOffer();
     this.downloadPromise = undefined;
@@ -290,6 +358,7 @@ export class UpdateManager {
       if (!this.current(generation) || updater !== this.updater) return this.snapshot();
       // Library events alone must never arm installation before our independent binding checks.
       this.downloaded = true;
+      this.downloadedFiles = [...files];
       const deferredUntil = this.deferred(), busy = this.activity.focusActive || this.activity.audioActive;
       return this.transition({state: busy || deferredUntil ? 'scheduled' : 'downloaded', deferredUntil,
         progressPercent: 100, canRetry: true, message: busy ? '更新已下载，专注和播放结束后可安装。' : '更新已下载，点击安装后保存本机数据并重启。'});
@@ -312,6 +381,7 @@ export class UpdateManager {
   defer(): UpdateStatus {
     if (this.disposed || !this.authenticated) return this.snapshot();
     if (this.status.mandatory) throw new Error("UPDATE_REQUIRED_CANNOT_DEFER");
+    this.intent.cancel();
     const deferredUntil = Date.now() + DEFER_MS;
     this.persistence.writeDeferUntil(deferredUntil);
     this.scheduleCheckIn(DEFER_MS);
@@ -327,6 +397,7 @@ export class UpdateManager {
   }
 
   private async performInstall(): Promise<void> {
+    if (this.config.trustMode === 'manifest-signed') throw new Error('UPDATE_SAVE_UNAVAILABLE');
     if (!this.config.installEnabled) throw new Error("UPDATE_CODE_SIGNATURE_REQUIRED");
     if (this.disposed || !this.authenticated) throw new Error("UPDATE_LOGIN_REQUIRED");
     if (!this.downloaded || !this.updater || !this.offer) throw new Error("UPDATE_NOT_DOWNLOADED");
@@ -355,6 +426,7 @@ export class UpdateManager {
     // Ordinary quitting never silently installs. Installation is an explicit, revalidated action.
     void installOnNormalQuit;
     this.disposed = true;
+    this.intent.dispose();
     this.invalidateSession();
   }
 
@@ -483,6 +555,7 @@ export class UpdateManager {
     if (!Number.isFinite(Date.parse(response.accessTokenExpiresAt)) || Date.parse(response.accessTokenExpiresAt) <= Date.now()) {
       throw new Error("UPDATE_TOKEN_EXPIRED");
     }
+    if (compareReleaseVersions(response.availableVersion, this.config.currentVersion) <= 0) throw new Error('UPDATE_MANIFEST_DOWNGRADE_BLOCKED');
     const manifest = verifySignedManifest(
       { manifestJson: response.manifestJson, signature: response.manifestSignature, keyId: response.manifestKeyId },
       this.config.publicKeys,
@@ -532,6 +605,7 @@ export class UpdateManager {
 
   private transition(patch: Partial<UpdateStatus>): UpdateStatus {
     if (this.disposed) return this.snapshot();
+    this.revision += 1;
     this.status = {
       ...this.status,
       ...patch,
@@ -550,7 +624,8 @@ export class UpdateManager {
       UPDATE_RATE_LIMITED: '更新服务暂时限流，请稍后重试，不要连续点击。',
       UPDATE_CODE_SIGNATURE_INVALID: '安装包签名无效或发布者不匹配，已阻止安装。',
       UPDATE_ARTIFACT_HASH_FAILED: '更新文件与签名清单不一致，已阻止安装。',
-      UPDATE_INSTALL_FAILED: '安装程序未能启动，当前版本仍可使用。请检查系统权限、防护软件及安装目录后重试。'
+      UPDATE_INSTALL_FAILED: '安装程序未能启动，当前版本仍可使用。请检查系统权限、防护软件及安装目录后重试。',
+      UPDATE_SAVE_UNAVAILABLE: '安装前本机保存与备份尚未就绪，已取消安装，当前版本可继续使用。'
     };
     const unauthorized = code === "UPDATE_LOGIN_REQUIRED";
     if (unauthorized) {
@@ -641,7 +716,8 @@ export function safeUpdateErrorCode(error: unknown): UpdateErrorCode {
   if (raw === "UPDATE_NOT_AVAILABLE") return raw;
   if (raw === "UPDATE_REQUIRED_CANNOT_DEFER") return raw;
   if (raw === 'UPDATE_INSTALL_FAILED') return raw;
-  if (/ENOSPC|DISK|SPACE/i.test(raw)) return "UPDATE_DISK_INSUFFICIENT";
+  if (raw === 'UPDATE_SAVE_UNAVAILABLE') return raw;
+  if (/ENOSPC|SQLITE_FULL|DISK|SPACE/i.test(raw)) return "UPDATE_DISK_INSUFFICIENT";
   if (/CHECKSUM|HASH|sha(?:256|512) checksum mismatch/i.test(raw)) return "UPDATE_ARTIFACT_HASH_FAILED";
   if (/HTTP_(?:ERROR_)?429|429 Too Many Requests/i.test(raw)) return 'UPDATE_RATE_LIMITED';
   if (/HTTP_401|TOKEN|EXPIRED/i.test(raw)) return "UPDATE_TOKEN_EXPIRED";

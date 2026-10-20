@@ -10,6 +10,30 @@ import { DATABASE_MIGRATIONS, type DatabaseMigration } from "../src/database/mig
 import type { QueueItem, SoundSettings } from "@studyroom/contracts";
 import {newPuzzle,swapPuzzle,new2048,move2048,newMines,revealMine,newSpider,dealSpider,undoSpider,isClassicGame} from '@studyroom/contracts';
 
+test('update backup includes committed WAL, freezes writes and releases on cancelled installation', () => {
+  withTemporaryDirectory(directory => {
+    const initialized = initializeLocalDatabase(join(directory, 'studyroom.sqlite'));
+    initialized.database.exec('PRAGMA journal_mode = WAL');
+    const store = new LocalDatabaseStore(initialized.database);
+    store.setSetting('update-test-setting', { volume: 0.3, queue: ['synthetic-track'] });
+    const backup = store.prepareUpdateBackup(join(directory, 'update-backups'), { 'studyroom-focus-session-v2': '{"synthetic":true}' });
+    try {
+      assert.equal(store.isUpdateFrozen(), true);
+      assert.throws(() => store.setSetting('should-not-write', true));
+      const copy = new LocalDatabaseStore(new DatabaseSync(backup.path, { readOnly: true }));
+      try { assert.deepEqual(copy.getSetting('update-test-setting'), { volume: 0.3, queue: ['synthetic-track'] }); }
+      finally { copy.close(); }
+      const metadata = JSON.parse(readFileSync(`${backup.path}.json`, 'utf8'));
+      assert.match(metadata.databaseSha256, /^[a-f0-9]{64}$/);
+      assert.equal(metadata.rendererState['studyroom-focus-session-v2'], '{"synthetic":true}');
+      backup.release(); backup.release();
+      assert.equal(store.isUpdateFrozen(), false);
+      store.setSetting('new-data-after-cancel', true);
+      assert.equal(store.getSetting('new-data-after-cancel'), true);
+    } finally { backup.release(); store.close(); }
+  });
+});
+
 test('focus cloud IDs retain all decimal digits through SQLite and restart',()=>{
   withTemporaryDirectory(directory=>{
     const path=join(directory,'focus.sqlite');

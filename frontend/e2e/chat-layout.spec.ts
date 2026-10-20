@@ -97,7 +97,7 @@ test('WeChat-inspired chat retains full editor, message alignment and image cont
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', { name: '返回会话' }).click();
   await expect(page.getByRole('complementary', { name: '会话列表' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /101 条未读/ })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: '会话列表' }).getByRole('button', { name: /101 条未读/ })).toBeVisible();
   await expect(page.locator('vite-error-overlay')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

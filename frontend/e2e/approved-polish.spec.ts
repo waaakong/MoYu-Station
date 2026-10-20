@@ -58,7 +58,7 @@ for (const width of [1440, 1280, 1080, 390]) {
       ['space','/scene','#scene-title'], ['focus','/focus','[data-focus-lock]'],
       ['sound','/sound','.sound-page'], ['feed','/feed','.feed-shell'], ['chat','/chat','.chat-shell'],
       ['profile','/profile','.profile-panel'], ['admin','/admin','.admin-panel'],
-      ['login','/login','input:visible'], ['register','/register','input:visible'], ['restricted','/banned','main']
+      ['login','/login','input:visible'], ['register','/register','input:visible'], ['restricted','/banned','.banned-page']
     ]) {
       await page.goto(path); await expect(page.locator(selector).first()).toBeVisible();
       if (id === 'feed') await expect(page.locator('.post-card')).toHaveCount(1);

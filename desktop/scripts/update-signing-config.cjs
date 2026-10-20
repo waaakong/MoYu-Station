@@ -12,7 +12,9 @@ function updateSigningConfig(env = process.env) {
   if (enabled(env.STUDYROOM_UPDATE_TEST_SIGNED)) throw new Error('UPDATE_LEGACY_TEST_SIGNED_FLAG_REJECTED');
   const controlEnabled = enabled(env.STUDYROOM_UPDATE_CONTROL_ENABLED);
   const mode = env.STUDYROOM_SIGNING_MODE || 'disabled';
-  if (!['disabled', 'trusted'].includes(mode)) throw new Error('UPDATE_SIGNING_MODE_INVALID');
+  if (!['disabled', 'trusted', 'manifest-signed'].includes(mode)) throw new Error('UPDATE_SIGNING_MODE_INVALID');
+  if (mode === 'manifest-signed' && !controlEnabled) throw new Error('UPDATE_MANIFEST_MODE_REQUIRES_CONTROL');
+  if (mode === 'manifest-signed' && (env.CSC_LINK || env.WIN_CSC_LINK)) throw new Error('UPDATE_MANIFEST_MODE_SIGNER_CONFLICT');
   let apiBaseUrl = env.STUDYROOM_UPDATE_API_BASE_URL || 'https://moyustation.xyz/api';
   let updateOrigin = env.STUDYROOM_UPDATE_ORIGIN || 'https://moyustation.xyz';
   const publicKeysJson = env.STUDYROOM_UPDATE_PUBLIC_KEYS_JSON || '';
@@ -43,6 +45,6 @@ function updateSigningConfig(env = process.env) {
     const timestamp = httpsUrl(env.STUDYROOM_SIGNING_TIMESTAMP_URL, 'UPDATE_SIGNING_TIMESTAMP_REQUIRED');
     signing = { publisher, thumbprint, timestampUrl: timestamp.href, certificateStore: !(env.CSC_LINK || env.WIN_CSC_LINK) };
   }
-  return { controlEnabled, installEnabled: controlEnabled && !!signing, apiBaseUrl, updateOrigin, publicKeysJson, signing };
+  return { mode, controlEnabled, installEnabled: controlEnabled && (!!signing || mode === 'manifest-signed'), apiBaseUrl, updateOrigin, publicKeysJson, signing };
 }
 module.exports = { updateSigningConfig };

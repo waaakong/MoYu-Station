@@ -49,7 +49,8 @@ test('space and detailed focus share one session across navigation and four view
   await expect(quick.getByRole('button',{name:'暂停',exact:true})).toBeEnabled();
   const first=await page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-focus-session-v2')!));
   await quick.getByRole('link',{name:'详细专注'}).click();await expect(page.locator('[data-focus-lock]')).toHaveAttribute('data-focus-lock',first.clientRecordId);
-  await page.clock.fastForward(61000);
+  // Continuous observed time, not one suspended-page jump (which must pause focus).
+  await page.clock.runFor(61000);
   await page.getByRole('link',{name:'空间',exact:true}).click();await expect(quick.locator('strong')).toHaveText('23:59');
   const second=await page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-focus-session-v2')!));expect(second.clientRecordId).toBe(first.clientRecordId);
   await quick.getByRole('button',{name:'暂停',exact:true}).click();

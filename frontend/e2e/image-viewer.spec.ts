@@ -65,7 +65,7 @@ test("load failure can retry, focus stays modal and returns to trigger without s
     await page.keyboard.press("Tab");
     expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
   }
-  expect(await page.locator("dialog").evaluate(element => element.matches(":modal"))).toBe(true);
+  expect(await page.getByRole('dialog', { name: '图片预览' }).evaluate(element => element.matches(":modal"))).toBe(true);
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");

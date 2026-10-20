@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { STUDYROOM_CLOUD_ORIGIN } from "../main/security/cloudOrigin";
 import type { CloudRequest, CloudResponse, CloudStreamEvent, CloudStreamKind } from "@studyroom/contracts";
+import type { UpdatePreparationResult, UpdatePreparationRequest } from '@studyroom/contracts';
 import {
   IPC_CHANNELS,
   type DesktopWindowState,
@@ -227,6 +228,13 @@ const bridge: StudyRoomDesktopBridge = Object.freeze({
   openExternal: (url: string) => invoke<void>(IPC_CHANNELS.openExternal, url),
   checkForUpdates: () => invoke<UpdateStatus>(IPC_CHANNELS.checkForUpdates),
   downloadUpdate: () => invoke<UpdateStatus>(IPC_CHANNELS.downloadUpdate),
+  startUpdate: () => invoke<UpdateStatus>(IPC_CHANNELS.startUpdate),
+  completeUpdatePreparation: (result: UpdatePreparationResult) => invoke<void>(IPC_CHANNELS.completeUpdatePreparation, result),
+  onUpdatePreparation: (listener: (request: UpdatePreparationRequest) => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, request: UpdatePreparationRequest) => listener(request);
+    ipcRenderer.on(IPC_CHANNELS.prepareUpdate, wrapped);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.prepareUpdate, wrapped);
+  },
   cancelUpdateDownload: () => invoke<UpdateStatus>(IPC_CHANNELS.cancelUpdateDownload),
   setAutomaticUpdateChecks: (enabled: boolean) => invoke<UpdateStatus>(IPC_CHANNELS.setAutomaticUpdateChecks, enabled),
   deferUpdate: () => invoke<UpdateStatus>(IPC_CHANNELS.deferUpdate),

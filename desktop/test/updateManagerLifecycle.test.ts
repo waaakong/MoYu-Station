@@ -110,6 +110,44 @@ it('downloads in the isolated double and defers installation while audio is acti
   manager.setActivityState({focusActive:false,audioActive:false});await manager.install();
   expect(doubles.updaters[0].quitAndInstall).toHaveBeenCalledTimes(1);
 });
+
+it('one click requires the host save-and-backup hook and cannot use the legacy manifest install route', async () => {
+  const {manager}=setup(true, offer, {trustMode:'manifest-signed'});
+  await manager.setAuthState({authenticated:true,accountSession:'member-1:epoch-1'});
+  await expect(manager.start()).rejects.toThrow('UPDATE_SAVE_UNAVAILABLE');
+  await manager.download();
+  await expect(manager.install()).rejects.toThrow('UPDATE_SAVE_UNAVAILABLE');
+  expect(doubles.updaters[0].quitAndInstall).not.toHaveBeenCalled();
+});
+
+it('one click binds the manifest, waits for drafts, saves and installs after a cancellable countdown', async () => {
+  const {manager}=setup(true, offer, {trustMode:'manifest-signed'});
+  const release=vi.fn(), prepare=vi.fn(async()=>release);
+  manager.setInstallPreparation(prepare);
+  await manager.setAuthState({authenticated:true,accountSession:'member-1:epoch-1'});
+  manager.setActivityState({focusActive:false,audioActive:false,draftsActive:true});
+  expect((await manager.start())).toMatchObject({state:'scheduled',updateIntent:true,waitReasons:['drafts']});
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(prepare).not.toHaveBeenCalled();
+  manager.setActivityState({focusActive:false,audioActive:false,draftsActive:false});
+  expect(manager.snapshot()).toMatchObject({state:'countdown',countdownSeconds:5});
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(prepare).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(doubles.updaters[0].quitAndInstall).toHaveBeenCalledOnce());
+  expect(release).not.toHaveBeenCalled();
+});
+
+it('one-click countdown is revoked by a true-to-true account epoch switch', async () => {
+  const {manager}=setup(true, offer, {trustMode:'manifest-signed'});
+  const prepare=vi.fn(async()=>vi.fn()); manager.setInstallPreparation(prepare);
+  await manager.setAuthState({authenticated:true,accountSession:'member-1:epoch-1'});
+  await manager.start();
+  await manager.setAuthState({authenticated:true,accountSession:'member-2:epoch-1'});
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(prepare).not.toHaveBeenCalled();
+  expect(manager.snapshot().updateIntent).toBe(false);
+  for (const updater of doubles.updaters) expect(updater.quitAndInstall).not.toHaveBeenCalled();
+});
 it('does not revive an offer when a check finishes after logout',async()=>{
   const {manager,fetcher}=setup();let finish!:(r:Response)=>void;
   fetcher.mockImplementationOnce(()=>new Promise<Response>(resolve=>{finish=resolve;}));

@@ -233,13 +233,15 @@ export class MainWindowManager {
     this.window.close();
   }
 
+  flushForUpdate(): void { this.saveNow(); }
+
   private scheduleSave(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.saveNow(), 250);
   }
 
   private saveNow(): void {
-    if (this.window.isDestroyed()) return;
+    if (this.window.isDestroyed() || this.store.isUpdateFrozen()) return;
     const bounds = this.window.isMaximized() ? this.window.getNormalBounds() : this.window.getBounds();
     this.store.setSetting(WINDOW_STATE_KEY, { ...bounds, maximized: this.window.isMaximized() });
   }

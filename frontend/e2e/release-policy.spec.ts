@@ -2,6 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 const ok=(data:unknown)=>({success:true,code:'OK',data});
 const original={id:'2104509220480131074',releaseId:'stable-0.3.1',version:'0.3.1',channel:'stable',status:'PILOT',rolloutPercentage:0,mandatory:false,minimumSupportedVersion:null,releaseNotes:'隔离验收制品，不分发',policyVersion:'0',createdAt:'2026-09-29T10:00:00'};
 async function fixture(page:Page,unknown=false){
+  await page.routeWebSocket('**/ws/chat', socket => { socket.onMessage(() => {}); });
   const calls:any[]=[];let current={...original};const logs:string[]=[];
   page.on('pageerror',e=>logs.push(e.message));page.on('console',m=>{if(['error','warning'].includes(m.type())&&!m.text().includes('net::ERR_FAILED'))logs.push(m.text());});
   await page.route('**/api/**',async route=>{

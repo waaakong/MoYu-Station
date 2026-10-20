@@ -92,6 +92,6 @@ export function startActivityRuntime(){
   function resume(){suspended=false;sampler.suspend();tick();void upload();}
   const stopLifecycle=window.studyRoomDesktop?.onDesktopLifecycle(event=>{if(event.type==='suspend')suspend();else resume();});
   window.addEventListener('pagehide',suspend);window.addEventListener('pageshow',resume);
-  const stopQuit=registerQuitSaver(async()=>{suspend();await saving;if(activityState.error&&!activityState.enabled)throw new Error(activityState.error);});
+  const stopQuit=registerQuitSaver(async()=>{suspend();await saving;if(activityState.error&&!activityState.enabled)throw new Error(activityState.error);},resume);
   return ()=>{suspend();stopped=true;epoch++;void saving.then(()=>releaseStream?.());stopIdentity();stopFocus();stopLifecycle?.();stopQuit();clearInterval(timer);clearInterval(syncTimer);window.removeEventListener('pagehide',suspend);window.removeEventListener('pageshow',resume);flushRuntime=async()=>{};};
 }

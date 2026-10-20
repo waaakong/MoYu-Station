@@ -62,6 +62,7 @@ test('modal draft survives closing and navigation; following is separate and res
   await expect(emojis.getByRole('button',{name:'我的收藏',exact:true})).toHaveCount(0);
   await emojis.getByRole('button',{name:'插入 📚',exact:true}).click();
   await emojis.getByRole('button',{name:'关闭',exact:true}).click();
+  await expect(emojis).not.toBeVisible();
   await expect(dialog.locator('textarea')).toHaveValue('只保留在当前账号会话📚');
   await dialog.locator('textarea').fill('只保留在当前账号会话');
   await expect(dialog.getByRole('button',{name:'@ 好友'})).toHaveCount(0);
@@ -104,10 +105,12 @@ test('new content does not jump reading position and four viewports keep editor 
     await page.setViewportSize(viewport);await page.locator('.feed-list').evaluate(node=>node.scrollTop=0);
     await page.getByRole('button',{name:'写动态',exact:true}).click();const dialog=page.getByRole('dialog',{name:'发布动态'});
     await expect(dialog).toBeVisible();await dialog.locator('textarea').fill('四档验收');await dialog.getByRole('button',{name:'发布',exact:true}).scrollIntoViewIfNeeded();
+    await expect(dialog).not.toHaveAttribute('data-sr-motion', /.+/);
     const box=await dialog.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.width).toBeLessThanOrEqual(viewport.width);expect(box!.height).toBeLessThanOrEqual(viewport.height);
     await page.screenshot({path:info.outputPath(`feed-editor-${viewport.width}.png`),animations:'disabled'});
     await dialog.getByRole('button',{name:'表情',exact:true}).click();
     const picker=page.getByRole('dialog',{name:'表情面板'}); await expect(picker).toBeVisible();
+    await expect(picker).not.toHaveAttribute('data-sr-motion', /.+/);
     const pickerBox=await picker.boundingBox(); expect(pickerBox!.x).toBeGreaterThanOrEqual(0);expect(pickerBox!.y).toBeGreaterThanOrEqual(0);expect(pickerBox!.x+pickerBox!.width).toBeLessThanOrEqual(viewport.width);expect(pickerBox!.y+pickerBox!.height).toBeLessThanOrEqual(viewport.height);
     await page.screenshot({path:info.outputPath(`feed-emoji-${viewport.width}.png`),animations:'disabled'});
     await page.keyboard.press('Escape');await expect(picker).not.toBeVisible();await expect(dialog.getByRole('button',{name:'表情',exact:true})).toBeFocused();

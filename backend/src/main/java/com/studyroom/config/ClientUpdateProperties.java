@@ -12,6 +12,8 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "studyroom.client-updates")
 public class ClientUpdateProperties {
   private boolean enabled = false;
+  public enum Audience { MEMBERS, REGISTERED }
+  private Audience audience = Audience.MEMBERS;
   // Public Release assets bypass login-only file access. Explicit deployment opt-in only.
   private boolean githubDownloadsEnabled = false;
   private String githubRepository = "";
@@ -24,6 +26,11 @@ public class ClientUpdateProperties {
   private Map<String, String> manifestPublicKeys = new LinkedHashMap<>();
 
   public boolean isEnabled() { return enabled; }
+  public Audience getAudience() { return audience; }
+  public void setAudience(Audience value) {
+    if (value == null) throw new IllegalArgumentException("Update audience is required");
+    audience = value;
+  }
   public boolean isGithubDownloadsEnabled() { return githubDownloadsEnabled; }
   public void setGithubDownloadsEnabled(boolean value) { githubDownloadsEnabled = value; }
   public String getGithubRepository() { return githubRepository; }

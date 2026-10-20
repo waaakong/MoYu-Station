@@ -47,7 +47,11 @@ for (const [width,height] of [[1440,900],[1080,640],[900,720],[820,720],[390,844
       expect(audio!.y).toBeGreaterThanOrEqual(scene!.y+scene!.height);
       for(const box of [scene!,audio!]) expect(Math.abs(box.x+box.width/2-outer!.x-outer!.width/2)).toBeLessThan(1);
     } else expect(Math.abs(scene!.y-audio!.y)).toBeLessThan(1);
-    const audioButtons = await page.locator('.player__audio-group button').evaluateAll(buttons=>buttons.map(el=>el.getBoundingClientRect().y));
+    // The inline player now has two independent volume rows and a mounted, closed
+    // details dialog. Check the transport row, not hidden dialog controls at y=0.
+    const transport = page.locator('.player--inline > .player__transport button');
+    await expect(transport).toHaveCount(3);
+    const audioButtons = await transport.evaluateAll(buttons=>buttons.map(el=>el.getBoundingClientRect().y));
     expect(Math.max(...audioButtons)-Math.min(...audioButtons)).toBeLessThan(1);
     await player.screenshot({path:info.outputPath(`player-${width}.png`),animations:'disabled'});
     await page.screenshot({path:info.outputPath(`focus-${width}.png`),animations:'disabled'});

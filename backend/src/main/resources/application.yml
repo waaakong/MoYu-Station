@@ -118,6 +118,7 @@ studyroom:
     minimum-free-space: ${STUDYROOM_UPLOAD_MINIMUM_FREE_SPACE:8589934592}
   client-updates:
     enabled: ${STUDYROOM_CLIENT_UPDATES_ENABLED:false}
+    audience: ${STUDYROOM_CLIENT_UPDATES_AUDIENCE:members}
     github-downloads-enabled: ${STUDYROOM_CLIENT_UPDATES_GITHUB_DOWNLOADS_ENABLED:false}
     github-repository: ${STUDYROOM_CLIENT_UPDATES_GITHUB_REPOSITORY:}
     base-url: ${STUDYROOM_CLIENT_UPDATES_BASE_URL:https://moyustation.xyz/private-updates}

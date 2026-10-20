@@ -60,6 +60,7 @@ const common = {
     __STUDYROOM_EXPERIMENTAL_PROVIDERS__: JSON.stringify(experimentalProviders),
     __STUDYROOM_UPDATE_CONTROL_ENABLED__: JSON.stringify(updateControlEnabled),
     __STUDYROOM_UPDATE_INSTALL_ENABLED__: JSON.stringify(updateInstallEnabled),
+    __STUDYROOM_UPDATE_TRUST_MODE__: JSON.stringify(updateSettings.mode),
     __STUDYROOM_UPDATE_CHANNEL__: JSON.stringify(updateChannel),
     __STUDYROOM_UPDATE_API_BASE_URL__: JSON.stringify(updateApiBaseUrl),
     __STUDYROOM_UPDATE_ORIGIN__: JSON.stringify(updateOrigin),

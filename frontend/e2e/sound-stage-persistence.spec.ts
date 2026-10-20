@@ -42,7 +42,7 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
     const path = '/src/stores/player.ts', queuePath = '/src/stores/queue.ts';
     const { usePlayerStore } = await import(path), { useQueueStore } = await import(queuePath);
     const player = usePlayerStore(), queue = useQueueStore();
-    queue.items = ['old', 'new'].map(id => ({ id, queuedAt: 1, track: { id, title: id, artist: 'Test', source: { kind: 'builtin', assetId: '/fixture.wav' } } }));
+    queue.items = ['old', 'new'].map(id => ({ id, queuedAt: 1, track: { id, title: id, artist: 'Test', source: { kind: 'local', fileToken: `fixture-${id}` } } }));
     player.playback.currentItemId = 'old';
     let retry = false;
     Object.assign(window, { lyricPlayer: player, rejectOldLyrics: undefined });

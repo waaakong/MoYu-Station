@@ -30,6 +30,6 @@ public class ClientUpdateController {
       HttpSession session
   ) {
     User user = authService.requireActiveUser(session);
-    return ApiResponse.ok(clientUpdateService.check(user, request));
+    return ApiResponse.ok(clientUpdateService.check(user, request, session));
   }
 }

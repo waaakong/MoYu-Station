@@ -5,6 +5,7 @@ param(
   [Parameter(Mandatory = $true)][string]$KeyId,
   [string]$GithubRepository,
   [string]$Server = "root@moyustation.xyz",
+  [ValidateSet('trusted', 'manifest-signed')][string]$TrustMode = 'trusted',
   [switch]$DryRun
 )
 
@@ -21,8 +22,9 @@ try {
   $env:STUDYROOM_UPDATE_CHANNEL = $Channel
   $env:STUDYROOM_RELEASE_VERSION = $Version
   $env:STUDYROOM_UPDATE_CONTROL_ENABLED = "1"
-  # Never turn a test flag into a production signing assertion.
-  if ($env:STUDYROOM_SIGNING_MODE -ne 'trusted') { throw "先配置受信任 Authenticode 签名，未签名发布保持阻断。" }
+  $env:STUDYROOM_SIGNING_MODE = $TrustMode
+  $keyFile = (Resolve-Path -LiteralPath $PrivateKeyPath).Path
+  if ($keyFile.StartsWith($workspaceRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest private key must remain outside the repository.' }
   Invoke-Checked { node -e "require('./desktop/scripts/update-signing-config.cjs').updateSigningConfig()" }
   Invoke-Checked { npm run check:secrets }
   Invoke-Checked { npm run check:assets }
@@ -36,8 +38,12 @@ try {
   $installer = Get-ChildItem -LiteralPath $releaseDir -Filter "*.exe" -File
   if ($installer.Count -ne 1) { throw "必须且只能生成一个 NSIS 安装包。" }
   $signature = Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
-  if (-not $signature.SignerCertificate -or $signature.Status -ne 'Valid' -or !$signature.TimeStamperCertificate -or
-      $signature.SignerCertificate.Thumbprint -ne $env:STUDYROOM_SIGNING_CERT_SHA1) { throw "安装包签名门禁失败：$($signature.Status)" }
+  if ($TrustMode -eq 'trusted') {
+    if (-not $signature.SignerCertificate -or $signature.Status -ne 'Valid' -or !$signature.TimeStamperCertificate -or
+        $signature.SignerCertificate.Thumbprint -ne $env:STUDYROOM_SIGNING_CERT_SHA1) { throw "安装包签名门禁失败：$($signature.Status)" }
+  } elseif ($signature.Status -ne 'NotSigned' -or $signature.SignerCertificate) {
+    throw 'manifest-signed mode requires an explicitly unsigned installer, not an invalid or unexpected publisher signature.'
+  }
 
   $sha256 = (Get-FileHash -LiteralPath $installer[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
   "$sha256 *$($installer[0].Name)" | Set-Content -LiteralPath (Join-Path $releaseDir "installer.sha256") -Encoding ascii

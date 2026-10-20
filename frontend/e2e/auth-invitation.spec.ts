@@ -89,6 +89,7 @@ test("desktop login exposes remember-me and sends the explicit choice", async ({
       readQueue: async () => [], replaceQueue: async () => undefined,
       readSoundSettings: async () => undefined, listSoundSnapshots: async () => [],
       onMediaCommand: () => () => undefined, onSourceSwitch: () => () => undefined,
+      onDesktopLifecycle: () => () => undefined,
       onUpdateStatus: () => () => undefined, setUpdaterAuthState: async () => updateStatus,
       setUpdaterActivityState: async () => updateStatus
     } });

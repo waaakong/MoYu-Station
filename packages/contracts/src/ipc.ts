@@ -104,6 +104,9 @@ export const IPC_CHANNELS = {
   openExternal: "shell:open-external",
   checkForUpdates: "updater:check",
   downloadUpdate: "updater:download",
+  startUpdate: "updater:start",
+  prepareUpdate: "updater:prepare",
+  completeUpdatePreparation: "updater:prepared",
   cancelUpdateDownload: "updater:cancel-download",
   setAutomaticUpdateChecks: "updater:automatic-checks",
   deferUpdate: "updater:defer",
@@ -341,6 +344,8 @@ export type UpdateState =
   | "checking"
   | "available"
   | "downloading"
+  | "countdown"
+  | "preparing"
   | "installing"
   | "downloaded"
   | "scheduled"
@@ -364,10 +369,12 @@ export type UpdateErrorCode =
   | "UPDATE_RATE_LIMITED"
   | "UPDATE_DISK_INSUFFICIENT"
   | "UPDATE_INSTALL_FAILED"
+  | "UPDATE_SAVE_UNAVAILABLE"
   | "UPDATE_NOT_AVAILABLE"
   | "UPDATE_REQUIRED_CANNOT_DEFER";
 
 export interface UpdateStatus {
+  revision?: number;
   state: UpdateState;
   currentVersion: string;
   availableVersion?: string;
@@ -384,6 +391,11 @@ export interface UpdateStatus {
   automaticUpdates?: boolean;
   automaticChecks?: boolean;
   installEnabled?: boolean;
+  trustMode?: 'disabled' | 'trusted' | 'manifest-signed';
+  oneClickEnabled?: boolean;
+  updateIntent?: boolean;
+  waitReasons?: Array<'focus' | 'audio' | 'drafts'>;
+  countdownSeconds?: number;
   canInstall?: boolean;
   downloadSource?: 'github' | 'server';
 }
@@ -391,15 +403,20 @@ export interface UpdateStatus {
 export interface UpdateActivityState {
   focusActive: boolean;
   audioActive: boolean;
+  draftsActive?: boolean;
 }
 
 export interface UpdaterAuthState {
   authenticated: boolean;
+  accountSession?: string;
 }
 
 export interface UpdateStatusChangedEvent {
   status: UpdateStatus;
 }
+
+export interface UpdatePreparationRequest { id: string }
+export interface UpdatePreparationResult { id: string; ready: boolean; rendererState?: Record<string, string> }
 
 export type MediaCommand = "play-pause" | "next" | "previous";
 
@@ -491,6 +508,9 @@ export interface StudyRoomDesktopBridge {
   openExternal(url: string): Promise<void>;
   checkForUpdates(): Promise<UpdateStatus>;
   downloadUpdate(): Promise<UpdateStatus>;
+  startUpdate(): Promise<UpdateStatus>;
+  completeUpdatePreparation(result: UpdatePreparationResult): Promise<void>;
+  onUpdatePreparation(listener: (request: UpdatePreparationRequest) => void): () => void;
   cancelUpdateDownload(): Promise<UpdateStatus>;
   setAutomaticUpdateChecks(enabled: boolean): Promise<UpdateStatus>;
   deferUpdate(): Promise<UpdateStatus>;

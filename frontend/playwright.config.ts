@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   testIgnore: ["media-composer.spec.ts","private-scene.spec.ts"],
   fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   reporter: "list",
   expect: {
     toHaveScreenshot: {

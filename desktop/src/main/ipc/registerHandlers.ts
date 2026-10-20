@@ -64,6 +64,8 @@ import {
   noInputSchema
 } from "./validation";
 import { validateExternalUrl } from "../security/navigation";
+import { UpdatePreparation } from '../../updater/updatePreparation';
+import { updatePreparationResultSchema } from './validation';
 import { scanAudioDirectory, scanAudioFile, SUPPORTED_AUDIO_EXTENSIONS } from "../../audio/library/scanner";
 import { pruneArtworkCache } from "../../audio/library/metadata";
 import type { ProviderCoordinator } from "../../providers/core/providerCoordinator";
@@ -103,6 +105,7 @@ interface RegisterHandlerDependencies {
   providerCache: MetadataCacheRepository;
   updater: UpdateManager;
   localProfile: LocalProfileService;
+  updateBackupDirectory?: string;
 }
 
 const knownErrors: Record<string, string> = {
@@ -118,6 +121,7 @@ const knownErrors: Record<string, string> = {
   UPDATE_LOGIN_REQUIRED: "请先登录再检查更新",
   UPDATE_NOT_AVAILABLE: "当前没有可下载的更新",
   UPDATE_NOT_DOWNLOADED: "更新尚未下载完成",
+  UPDATE_SAVE_UNAVAILABLE: "安装前本机保存与备份尚未就绪，已取消安装",
   UPDATE_REQUIRED_CANNOT_DEFER: "安全更新不能延后",
   IPC_CONCURRENCY_LIMITED: "操作过于集中，请稍后重试",
   IPC_RATE_LIMITED: "操作过于频繁，请稍后重试",
@@ -193,13 +197,24 @@ export function registerIpcHandlers(dependencies: RegisterHandlerDependencies): 
     providers, radio, providerLogin, providerMedia, providerVault, providerCache, updater, localProfile
   } = dependencies;
   const guard = new IpcGuard(window.webContents.id);
+  const preparation = new UpdatePreparation(window, state => {
+    if (!dependencies.updateBackupDirectory || guard.hasOtherInFlight(IPC_CHANNELS.completeUpdatePreparation)) throw new Error('UPDATE_SAVE_UNAVAILABLE');
+    windowManager.flushForUpdate();
+    return database.prepareUpdateBackup(dependencies.updateBackupDirectory, state).release;
+  });
+  if (dependencies.updateBackupDirectory) updater.setInstallPreparation(signal => preparation.prepare(signal));
+  const frozenAllowed = new Set<IpcChannel>([IPC_CHANNELS.cancelUpdateDownload, IPC_CHANNELS.setUpdaterAuthState,
+    IPC_CHANNELS.setUpdaterActivityState, IPC_CHANNELS.completeUpdatePreparation, IPC_CHANNELS.windowState]);
   const registered: IpcChannel[] = [];
 
   const handle = <T>(channel: IpcChannel, callback: (input: unknown) => Promise<T> | T) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, async (event, input): Promise<IpcResult<T>> => {
       try {
-        const value = await guard.invoke(channel, event, () => callback(input));
+        const value = await guard.invoke(channel, event, () => {
+          if (database.isUpdateFrozen() && !frozenAllowed.has(channel)) throw new Error('UPDATE_SAVE_UNAVAILABLE');
+          return callback(input);
+        });
         return { ok: true, value };
       } catch (error) {
         return failure(error);
@@ -515,6 +530,8 @@ export function registerIpcHandlers(dependencies: RegisterHandlerDependencies): 
   });
   handle(IPC_CHANNELS.checkForUpdates, () => updater.check(true));
   handle(IPC_CHANNELS.downloadUpdate, () => updater.download());
+  handle(IPC_CHANNELS.startUpdate, input => { noInputSchema.parse(input); return updater.start(); });
+  handle(IPC_CHANNELS.completeUpdatePreparation, input => preparation.complete(updatePreparationResultSchema.parse(input)));
   handle(IPC_CHANNELS.cancelUpdateDownload, () => updater.cancelDownload());
   handle(IPC_CHANNELS.setAutomaticUpdateChecks, (input) => {
     if (typeof input !== 'boolean') throw new Error('INVALID_UPDATE_PREFERENCE');
@@ -537,6 +554,7 @@ export function registerIpcHandlers(dependencies: RegisterHandlerDependencies): 
   });
 
   return () => {
+    preparation.dispose();
     for (const channel of registered) ipcMain.removeHandler(channel);
   };
 }

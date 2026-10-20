@@ -45,7 +45,7 @@
         当前版本 {{ updates.status.currentVersion }} · 最新版本 {{ updates.status.availableVersion }}。
         {{ updates.status.state === 'manual-update-available' ? '前往下载页查看更新说明并手动下载安装。' : '可先查看更新说明，再决定下载；不会自动安装或打断当前工作。' }}
       </p>
-      <p class="manual-update-dialog__note">{{ updates.status.state === 'manual-update-available' ? '客户端不会自动下载或安装；下载页会显示当前安装包的版本与校验值。' : '下载后仍需确认安装；安装前会保存本机数据，并复核版本与权限。' }}</p>
+      <p class="manual-update-dialog__note">{{ updates.status.state === 'manual-update-available' ? '客户端不会自动下载或安装；下载页会显示当前安装包的版本与校验值。' : updates.status.oneClickEnabled ? '点击“更新并重启”授权本次完整更新；忙碌时等待，重启前可取消。Windows 安全提示仍需你确认。' : '下载后仍需确认安装；安装前会保存本机数据，并复核版本与权限。' }}</p>
       <div class="manual-update-dialog__actions">
         <button type="button" class="manual-update-dialog__primary" @click="openUpdateAction">{{ updates.status.state === 'manual-update-available' ? '前往下载页' : '查看更新' }}</button>
         <button type="button" @click="dismissManualUpdate">稍后</button>
@@ -160,8 +160,12 @@ function exitImmersive(event: KeyboardEvent) {
 onMounted(() => document.addEventListener('keydown', exitImmersive));
 onBeforeUnmount(() => document.removeEventListener('keydown', exitImmersive));
 watch(
-  () => [updates.status.state, updates.status.availableVersion, route.name, updates.initialized, auth.isLoggedIn] as const,
+  () => [updates.status.state, updates.status.availableVersion, route.fullPath, updates.initialized, auth.isLoggedIn] as const,
   async ([state, version]) => {
+    if (route.name === 'profile' && route.query.module === 'client') {
+      if (manualUpdateDialog.value?.open) closeMotionDialog(manualUpdateDialog.value);
+      return;
+    }
     if (!['manual-update-available', 'available', 'required'].includes(state)) {
       if (manualUpdateDialog.value?.open) closeMotionDialog(manualUpdateDialog.value);
       return;

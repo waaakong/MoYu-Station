@@ -19,6 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
+import org.springframework.session.Session;
+import org.springframework.session.SessionRepository;
+import javax.servlet.http.HttpSession;
+import com.studyroom.config.AuthSecurityProperties;
+import com.studyroom.security.SessionPolicyInterceptor;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -48,7 +53,7 @@ import java.util.regex.Pattern;
 public class ClientUpdateService {
   public static final Set<String> CHANNELS = Set.of("stable", "beta", "provider-experimental");
   public static final Set<String> RELEASE_STATUSES = Set.of("DRAFT", "PILOT", "ROLLING", "FULL", "PAUSED", "WITHDRAWN");
-  public static final Set<Integer> ROLLOUT_PERCENTAGES = Set.of(0, 10, 30, 100);
+  public static final Set<Integer> ROLLOUT_PERCENTAGES = Set.of(0, 10, 30, 50, 100);
   private static final Pattern SAFE_SEGMENT = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$");
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final String GRANT_PREFIX = "studyroom:update:grant:";
@@ -59,6 +64,12 @@ public class ClientUpdateService {
   private final ClientUpdateProperties properties;
   private final ClientUpdateSocketHub socketHub;
   private final AdminAuditService adminAuditService;
+  private SessionRepository<? extends Session> sessions;
+  private AuthSecurityProperties sessionPolicy = new AuthSecurityProperties();
+  @Autowired(required = false)
+  public void setSessionRepository(SessionRepository<? extends Session> repository) { sessions = repository; }
+  @Autowired
+  public void setSessionPolicy(AuthSecurityProperties policy) { sessionPolicy = policy; }
 
   @Autowired
   public ClientUpdateService(
@@ -88,6 +99,10 @@ public class ClientUpdateService {
   }
 
   public CheckResponse check(User user, ClientUpdateCheckRequest request) {
+    return check(user, request, null);
+  }
+
+  public CheckResponse check(User user, ClientUpdateCheckRequest request, HttpSession session) {
     String channel = normalizeChannel(request.getChannel());
     ClientVersion currentVersion = parseVersion(request.getCurrentVersion());
     if (!"win32".equals(request.getPlatform()) || !"x64".equals(request.getArch())) {
@@ -110,7 +125,7 @@ public class ClientUpdateService {
 
     boolean required = release.mandatory() || (StringUtils.hasText(release.minimumSupportedVersion())
         && currentVersion.compareTo(parseVersion(release.minimumSupportedVersion())) < 0);
-    String grant = issueGrant(user.getId(), release);
+    String grant = issueGrant(user, release, session);
     String base = properties.getBaseUrl().replaceAll("/+$", "");
     return new CheckResponse(
         required ? "required" : "available",
@@ -136,16 +151,20 @@ public class ClientUpdateService {
   }
 
   public boolean hasAnyMembership(Long userId) {
-    Integer count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM sr_client_update_membership WHERE user_id = ? AND enabled = 1",
-        Integer.class, userId);
-    return count != null && count > 0;
+    return hasMembership(userId, "stable") || hasMembership(userId, "beta") || hasMembership(userId, "provider-experimental");
   }
 
   public boolean hasMembership(Long userId, String channel) {
+    channel = normalizeChannel(channel);
+    if (!properties.isEnabled() || userId == null || userId <= 0) return false;
+    // Explicit revocation remains effective even for the registered stable audience.
+    boolean registered = "stable".equals(channel) && properties.getAudience() == ClientUpdateProperties.Audience.REGISTERED;
     Integer count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM sr_client_update_membership WHERE user_id = ? AND channel = ? AND enabled = 1",
-        Integer.class, userId, normalizeChannel(channel));
+        "SELECT COUNT(*) FROM sr_user u WHERE u.id = ? AND u.deleted = 0 " +
+            "AND u.user_type IN ('NORMAL','MUTED','ADMIN') AND COALESCE(u.force_password_change,0) = 0 " +
+            "AND NOT EXISTS (SELECT 1 FROM sr_client_update_membership m WHERE m.user_id = u.id AND m.channel = ? AND m.enabled = 0) " +
+            "AND (? = 1 OR EXISTS (SELECT 1 FROM sr_client_update_membership m WHERE m.user_id = u.id AND m.channel = ? AND m.enabled = 1))",
+        Integer.class, userId, channel, registered ? 1 : 0, channel);
     return count != null && count > 0;
   }
 
@@ -157,23 +176,43 @@ public class ClientUpdateService {
     try {
       String value = redisTemplate.opsForValue().get(GRANT_PREFIX + sha256(token));
       if (!StringUtils.hasText(value)) return false;
-      String[] parts = value.split("\\|", 3);
-      if (parts.length != 3) return false;
+      String[] parts = value.split("\\|", 5);
+      if (parts.length != 5) return false; // Old unbound grants expire closed; clients can recheck.
       Long releaseId = Long.valueOf(parts[0]);
       String artifactKey = parts[1];
       String expectedPrefix = "/private-updates/releases/" + artifactKey + "/";
       if (!originalUri.startsWith(expectedPrefix)
           || !originalUri.substring(expectedPrefix.length()).matches("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) return false;
       Long grantedUserId = Long.valueOf(parts[2]);
-      Integer active = jdbcTemplate.queryForObject(
-          "SELECT COUNT(*) FROM sr_client_release r JOIN sr_client_update_membership m " +
-              "ON m.user_id = ? AND m.channel = r.channel AND m.enabled = 1 " +
-              "WHERE r.id = ? AND r.artifact_key = ? AND r.status IN ('PILOT','ROLLING','FULL')",
-          Integer.class, grantedUserId, releaseId, artifactKey);
-      return active != null && active == 1;
-    } catch (DataAccessException | IllegalArgumentException exception) {
+      if (!hasMembership(grantedUserId, artifactKey.split("/", 2)[0])) return false;
+      String loginVersion = new String(Base64.getUrlDecoder().decode(parts[3]), StandardCharsets.UTF_8);
+      String sessionId = new String(Base64.getUrlDecoder().decode(parts[4]), StandardCharsets.UTF_8);
+      if (!liveGrantSession(sessionId, grantedUserId, loginVersion)) return false;
+      Integer sessionCurrent = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM sr_user WHERE id = ? AND login_version = ?", Integer.class, grantedUserId, loginVersion);
+      if (sessionCurrent == null || sessionCurrent != 1) return false;
+      List<Map<String,Object>> releases = jdbcTemplate.queryForList(
+          "SELECT channel,status,rollout_percentage,release_salt FROM sr_client_release WHERE id = ? AND artifact_key = ?", releaseId, artifactKey);
+      if (releases.size() != 1) return false;
+      Map<String,Object> release = releases.get(0);
+      if (!(release.get("rollout_percentage") instanceof Number percentage)
+          || !artifactKey.startsWith(String.valueOf(release.get("channel")) + "/")) return false;
+      return rolloutAllowed(String.valueOf(release.get("status")), String.valueOf(release.get("release_salt")),
+          percentage.intValue(), grantedUserId, String.valueOf(release.get("channel")));
+    } catch (RuntimeException exception) {
       return false;
     }
+  }
+
+  private boolean liveGrantSession(String id, Long userId, String epoch) {
+    if (sessions == null || !StringUtils.hasText(id)) return false;
+    Session session = sessions.findById(id);
+    if (session == null || session.isExpired() || !userId.equals(session.getAttribute(AuthService.SESSION_USER_ID))
+        || !epoch.equals(session.getAttribute(AuthService.SESSION_LOGIN_VERSION))) return false;
+    if (Boolean.TRUE.equals(session.getAttribute(SessionPolicyInterceptor.REMEMBERED_ATTRIBUTE))) {
+      Object created = session.getAttribute(SessionPolicyInterceptor.CREATED_AT_ATTRIBUTE);
+      if (!(created instanceof Number timestamp) || Instant.now().toEpochMilli() - timestamp.longValue() >= sessionPolicy.getDesktopSessionLifetime().toMillis()) return false;
+    }
+    return true;
   }
 
   public List<MembershipView> memberships() {
@@ -257,9 +296,9 @@ public class ClientUpdateService {
     long expected = expectedVersion(request);
     String status = request.getStatus().trim().toUpperCase(Locale.ROOT);
     if (!RELEASE_STATUSES.contains(status)) throw new BusinessException("发布状态不正确。");
-    if (!ROLLOUT_PERCENTAGES.contains(request.getRolloutPercentage())) throw new BusinessException("灰度比例只允许 0、10、30 或 100。");
-    if ("ROLLING".equals(status) && !Set.of(10, 30, 100).contains(request.getRolloutPercentage())) {
-      throw new BusinessException("灰度发布必须使用 10%、30% 或 100%。");
+    if (!ROLLOUT_PERCENTAGES.contains(request.getRolloutPercentage())) throw new BusinessException("灰度比例只允许 0、10、30、50 或 100。");
+    if ("ROLLING".equals(status) && !Set.of(10, 30, 50, 100).contains(request.getRolloutPercentage())) {
+      throw new BusinessException("灰度发布必须使用 10%、30%、50% 或 100%。");
     }
     if (!"ROLLING".equals(status) && request.getRolloutPercentage() != 0 && !"FULL".equals(status)) {
       throw new BusinessException("当前发布状态不能设置灰度比例。");
@@ -395,12 +434,23 @@ public class ClientUpdateService {
   }
 
   private boolean isEligibleForRollout(User user, ReleaseView release) {
-    return switch (release.status()) {
+    return rolloutAllowed(release.status(), release.releaseSalt(), release.rolloutPercentage(), user.getId(), release.channel());
+  }
+
+  private boolean rolloutAllowed(String status, String salt, int percentage, Long userId, String channel) {
+    return switch (status) {
       case "FULL" -> true;
-      case "PILOT" -> "ADMIN".equalsIgnoreCase(user.getUserType());
-      case "ROLLING" -> rolloutBucket(release.releaseSalt(), user.getId()) < release.rolloutPercentage();
+      case "PILOT" -> explicitMembership(userId, channel);
+      case "ROLLING" -> rolloutBucket(salt, userId) < percentage;
       default -> false;
     };
+  }
+
+  private boolean explicitMembership(Long userId, String channel) {
+    Integer count = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM sr_client_update_membership WHERE user_id = ? AND channel = ? AND enabled = 1",
+        Integer.class, userId, channel);
+    return count != null && count > 0;
   }
 
   int rolloutBucket(String salt, Long userId) {
@@ -409,12 +459,14 @@ public class ClientUpdateService {
     return (int) (Integer.toUnsignedLong(value) % 100);
   }
 
-  private String issueGrant(Long userId, ReleaseView release) {
+  private String issueGrant(User user, ReleaseView release, HttpSession session) {
+    if (!StringUtils.hasText(user.getLoginVersion())) throw new BusinessException("登录状态不可用，请重新登录。");
+    if (session == null || !liveGrantSession(session.getId(), user.getId(), user.getLoginVersion())) throw new BusinessException("更新会话不可用，请重新登录。");
     String token = randomToken();
     try {
       redisTemplate.opsForValue().set(
           GRANT_PREFIX + sha256(token),
-          release.id() + "|" + release.artifactKey() + "|" + userId,
+          release.id() + "|" + release.artifactKey() + "|" + user.getId() + "|" + Base64.getUrlEncoder().withoutPadding().encodeToString(user.getLoginVersion().getBytes(StandardCharsets.UTF_8)) + "|" + Base64.getUrlEncoder().withoutPadding().encodeToString(session.getId().getBytes(StandardCharsets.UTF_8)),
           properties.getGrantTtl());
       return token;
     } catch (DataAccessException exception) {

@@ -15,19 +15,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.contains;
 
 class ClientUpdateServiceTest {
   private JdbcTemplate jdbcTemplate;
   private ClientUpdateProperties properties;
   private ClientUpdateService service;
+  private StringRedisTemplate redis;
 
   @BeforeEach
   void setUp() {
     jdbcTemplate = mock(JdbcTemplate.class);
     properties = new ClientUpdateProperties();
+    redis = mock(StringRedisTemplate.class);
     service = new ClientUpdateService(
         jdbcTemplate,
-        mock(StringRedisTemplate.class),
+        redis,
         new ObjectMapper(),
         properties,
         mock(ClientUpdateSocketHub.class)
@@ -44,10 +49,77 @@ class ClientUpdateServiceTest {
   @Test
   void rejectsAccountsOutsideTheChannelMembership() {
     properties.setEnabled(true);
-    when(jdbcTemplate.queryForObject(any(String.class), eq(Integer.class), any(), any())).thenReturn(0);
+    when(jdbcTemplate.queryForObject(any(String.class), eq(Integer.class), any(), any(), any(), any())).thenReturn(0);
     ClientUpdateService.CheckResponse response = service.check(user(), request("stable", "0.1.0"));
     assertThat(response.status()).isEqualTo("unauthorized");
     assertThat(response.feedUrl()).isNull();
+  }
+
+  @Test
+  void audienceDefaultsToMembersAndRegisteredNeverExpandsExperimentalChannels() {
+    assertThat(properties.getAudience()).isEqualTo(ClientUpdateProperties.Audience.MEMBERS);
+    properties.setEnabled(true);
+    properties.setAudience(ClientUpdateProperties.Audience.REGISTERED);
+    when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*) FROM sr_user"), eq(Integer.class),
+        eq(42L), eq("stable"), eq(1), eq("stable"))).thenReturn(1);
+    assertThat(service.hasMembership(42L, "stable")).isTrue();
+    assertThat(service.hasMembership(42L, "beta")).isFalse();
+    assertThat(service.hasMembership(42L, "provider-experimental")).isFalse();
+    verify(jdbcTemplate).queryForObject(contains("m.enabled = 0"), eq(Integer.class),
+        eq(42L), eq("stable"), eq(1), eq("stable"));
+    verify(jdbcTemplate).queryForObject(contains("force_password_change"), eq(Integer.class),
+        eq(42L), eq("beta"), eq(0), eq("beta"));
+  }
+
+  @Test
+  void disabledAudienceDoesNotQueryAccountsAndHalfRolloutIsSupported() {
+    properties.setAudience(ClientUpdateProperties.Audience.REGISTERED);
+    assertThat(service.hasMembership(42L, "stable")).isFalse();
+    verify(jdbcTemplate, never()).queryForObject(any(String.class), eq(Integer.class), any(), any(), any(), any());
+    assertThat(ClientUpdateService.ROLLOUT_PERCENTAGES).contains(50);
+    assertThatThrownBy(() -> properties.setAudience(null)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void downloadGrantRechecksAccountEpochWithdrawalAndPilotMembership() {
+    properties.setEnabled(true);
+    properties.setAudience(ClientUpdateProperties.Audience.REGISTERED);
+    var values = mock(org.springframework.data.redis.core.ValueOperations.class);
+    when(redis.opsForValue()).thenReturn(values);
+    String epoch = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("epoch-1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var session = new org.springframework.session.MapSession("fixture-session");
+    session.setAttribute(AuthService.SESSION_USER_ID, 42L);
+    session.setAttribute(AuthService.SESSION_LOGIN_VERSION, "epoch-1");
+    var repository = mock(org.springframework.session.SessionRepository.class);
+    service.setSessionRepository(repository);
+    when(repository.findById("fixture-session")).thenReturn(session);
+    String sessionId = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("fixture-session".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    when(values.get(any(String.class))).thenReturn("1|stable/0.3.0|42|" + epoch + "|" + sessionId);
+    when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*) FROM sr_user u"), eq(Integer.class),
+        eq(42L), eq("stable"), eq(1), eq("stable"))).thenReturn(1);
+    when(jdbcTemplate.queryForObject(contains("login_version = ?"), eq(Integer.class), eq(42L), eq("epoch-1"))).thenReturn(1);
+    var full = java.util.Map.<String, Object>of("channel", "stable", "status", "FULL", "rollout_percentage", 100, "release_salt", "salt");
+    when(jdbcTemplate.queryForList(contains("FROM sr_client_release WHERE"), eq(1L), eq("stable/0.3.0"))).thenReturn(java.util.List.of(full));
+    String auth = "Bearer " + "a".repeat(64), uri = "/private-updates/releases/stable/0.3.0/installer.exe";
+    assertThat(service.verifyGrant(auth, uri)).isTrue();
+    when(repository.findById("fixture-session")).thenReturn(null);
+    assertThat(service.verifyGrant(auth, uri)).isFalse();
+    when(repository.findById("fixture-session")).thenReturn(session);
+    assertThat(service.verifyGrant(auth, "/private-updates/releases/stable/0.4.0/installer.exe")).isFalse();
+    assertThat(service.verifyGrant(auth, uri + "%2e")).isFalse();
+    when(jdbcTemplate.queryForObject(contains("login_version = ?"), eq(Integer.class), eq(42L), eq("epoch-1"))).thenReturn(0);
+    assertThat(service.verifyGrant(auth, uri)).isFalse();
+    when(jdbcTemplate.queryForObject(contains("login_version = ?"), eq(Integer.class), eq(42L), eq("epoch-1"))).thenReturn(1);
+    when(jdbcTemplate.queryForList(contains("FROM sr_client_release WHERE"), eq(1L), eq("stable/0.3.0")))
+        .thenReturn(java.util.List.of(java.util.Map.of("channel", "stable", "status", "WITHDRAWN", "rollout_percentage", 100, "release_salt", "salt")));
+    assertThat(service.verifyGrant(auth, uri)).isFalse();
+    when(jdbcTemplate.queryForList(contains("FROM sr_client_release WHERE"), eq(1L), eq("stable/0.3.0")))
+        .thenReturn(java.util.List.of(java.util.Map.of("channel", "stable", "status", "PILOT", "rollout_percentage", 0, "release_salt", "salt")));
+    assertThat(service.verifyGrant(auth, uri)).isFalse();
+    when(jdbcTemplate.queryForObject(contains("FROM sr_client_update_membership WHERE"), eq(Integer.class), eq(42L), eq("stable"))).thenReturn(1);
+    assertThat(service.verifyGrant(auth, uri)).isTrue();
+    when(values.get(any(String.class))).thenReturn("1|stable/0.3.0|42");
+    assertThat(service.verifyGrant(auth, uri)).isFalse();
   }
 
   @Test

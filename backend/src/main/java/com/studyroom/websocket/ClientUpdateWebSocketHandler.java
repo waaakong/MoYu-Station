@@ -5,6 +5,7 @@ import com.studyroom.service.AuthService;
 import com.studyroom.service.ChatService;
 import com.studyroom.service.ClientUpdateService;
 import com.studyroom.service.ClientUpdateSocketHub;
+import com.studyroom.security.SocketSessionGuard;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
@@ -18,15 +19,18 @@ public class ClientUpdateWebSocketHandler extends TextWebSocketHandler {
   private final ChatService chatService;
   private final ClientUpdateService updateService;
   private final ClientUpdateSocketHub socketHub;
+  private final SocketSessionGuard sessionGuard;
 
-  public ClientUpdateWebSocketHandler(ChatService chatService, ClientUpdateService updateService, ClientUpdateSocketHub socketHub) {
+  public ClientUpdateWebSocketHandler(ChatService chatService, ClientUpdateService updateService, ClientUpdateSocketHub socketHub, SocketSessionGuard sessionGuard) {
     this.chatService = chatService;
     this.updateService = updateService;
     this.socketHub = socketHub;
+    this.sessionGuard = sessionGuard;
   }
 
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    sessionGuard.check(session);
     Long userId = readLong(session.getAttributes().get(AuthService.SESSION_USER_ID));
     String loginVersion = session.getAttributes().get(AuthService.SESSION_LOGIN_VERSION) instanceof String value ? value : "";
     User user = chatService.requireSocketUser(userId, loginVersion);
@@ -35,7 +39,10 @@ public class ClientUpdateWebSocketHandler extends TextWebSocketHandler {
       return;
     }
     session.getAttributes().put(UPDATE_USER_ID, user.getId());
-    socketHub.register(user.getId(), session);
+    socketHub.register(user.getId(), session, socket -> {
+      sessionGuard.check(socket);
+      if (!updateService.hasAnyMembership(user.getId())) throw new IllegalStateException("UPDATE_MEMBERSHIP_REVOKED");
+    });
     socketHub.send(session, "CONNECTED", Map.of("updates", true));
   }
 
