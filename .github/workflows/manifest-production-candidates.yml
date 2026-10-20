@@ -90,14 +90,10 @@ jobs:
             apiBaseUrl=$env:STUDYROOM_UPDATE_API_BASE_URL
             publicKeysSha256=(Get-FileHash config/update-public-keys.json -Algorithm SHA256).Hash.ToLowerInvariant()
             features=$features; files=$hashes; workflowRun=$env:GITHUB_RUN_ID
-            publication=false; productionAcceptance=false
+            publication=$false; productionAcceptance=$false
           }
           $receipt | ConvertTo-Json -Depth 6 | Set-Content "$directory/artifact.json" -Encoding utf8
           Write-Output 'Candidate identity, unsigned status, hashes and receipt verified'
-          # All native build exits and verification failures are checked above.
-          # Do not let a diagnostic cmdlet's native subprocess exit leak into the
-          # runner's implicit LASTEXITCODE epilogue after successful verification.
-          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: moyu-production-origin-${{ matrix.version }}-${{ github.sha }}
