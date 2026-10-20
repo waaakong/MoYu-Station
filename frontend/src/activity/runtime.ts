@@ -14,6 +14,9 @@ export function startActivityRuntime(){
   const auth=useAuthStore(),focus=useFocusStore();
   let epoch=0,owner='',session='',sequence=0,sampler=new ActivitySampler(),batch:ActivityBatch|undefined;
   let saving=Promise.resolve(),uploading=false,stopped=false,suspended=false,enabled=false,backlogPaused=false;
+  // Cloud capability/sync failures do not imply unsaved local data. Keep a local
+  // persistence fault separately, including across account/UI error transitions.
+  let localSaveError='';
   let releaseStream:(()=>void)|undefined;
   const identity=()=>!auth.authTransition&&!auth.isBanned&&auth.user?String(auth.user.id):'';
   const valid=(ticket:number,scope:string)=>!stopped&&ticket===epoch&&identity()===scope;
@@ -21,7 +24,7 @@ export function startActivityRuntime(){
     if(!batch?.segments.length)return;
     const record={owner,batch:structuredClone(batch),sealed},ticket=epoch;
     activityState.pending=Math.max(1,activityState.pending);
-    saving=saving.then(()=>writeActivity(record)).catch(()=>{if(ticket===epoch){enabled=false;activityState.enabled=false;activityState.error='活动记录未能保存，计时采集已暂停。请检查本机存储并重启；已保存记录不会删除。';}});
+    saving=saving.then(()=>writeActivity(record)).catch(()=>{localSaveError='活动记录未能保存，计时采集已暂停。请检查本机存储并重启；已保存记录不会删除。';if(ticket===epoch){enabled=false;activityState.enabled=false;activityState.error=localSaveError;}});
     if(sealed)batch=undefined;
   }
   function tick(){
@@ -92,6 +95,6 @@ export function startActivityRuntime(){
   function resume(){suspended=false;sampler.suspend();tick();void upload();}
   const stopLifecycle=window.studyRoomDesktop?.onDesktopLifecycle(event=>{if(event.type==='suspend')suspend();else resume();});
   window.addEventListener('pagehide',suspend);window.addEventListener('pageshow',resume);
-  const stopQuit=registerQuitSaver(async()=>{suspend();await saving;if(activityState.error&&!activityState.enabled)throw new Error(activityState.error);},resume);
+  const stopQuit=registerQuitSaver(async()=>{suspend();await saving;if(localSaveError)throw new Error(localSaveError);},resume);
   return ()=>{suspend();stopped=true;epoch++;void saving.then(()=>releaseStream?.());stopIdentity();stopFocus();stopLifecycle?.();stopQuit();clearInterval(timer);clearInterval(syncTimer);window.removeEventListener('pagehide',suspend);window.removeEventListener('pageshow',resume);flushRuntime=async()=>{};};
 }

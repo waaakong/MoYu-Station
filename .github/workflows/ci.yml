@@ -162,7 +162,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['0.2.0-trial.20261020.1', '0.2.0-trial.20261020.2']
+        version: ['0.2.0-trial.20261020.3', '0.2.0-trial.20261020.4']
     env:
       STUDYROOM_SIGNING_MODE: manifest-signed
       STUDYROOM_UPDATE_CONTROL_ENABLED: 'true'
