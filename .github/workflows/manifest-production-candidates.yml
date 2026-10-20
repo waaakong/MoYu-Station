@@ -74,9 +74,11 @@ jobs:
           if ($packageExit -ne 0) { throw "Installer packaging failed ($packageExit)" }
           $directory = 'desktop/release/stable'
           $files = @(Get-ChildItem $directory -File | Where-Object { $_.Extension -in '.exe','.blockmap' -or $_.Name -eq 'latest.yml' })
+          Write-Output "Candidate file count: $($files.Count)"
           $exe = @($files | Where-Object Extension -eq '.exe')
           if ($files.Count -ne 3 -or $exe.Count -ne 1 -or $exe[0].Name -ne "MoYu-Setup-$env:STUDYROOM_RELEASE_VERSION-win-x64.exe") { throw 'Unexpected candidate files' }
           if ((Get-AuthenticodeSignature -LiteralPath $exe[0].FullName).Status -ne 'NotSigned') { throw 'Expected explicitly unsigned installer' }
+          Write-Output 'Unsigned installer status verified'
           $hashes = @($files | ForEach-Object { @{ name=$_.Name; size=$_.Length; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } })
           $features = @{}
           Get-ChildItem Env: | Where-Object { $_.Name -match '^(STUDYROOM_PROVIDER|STUDYROOM_PROVIDERS$|STUDYROOM_EXPERIMENTAL_PROVIDERS$|VITE_FEATURE_)' } | ForEach-Object { $features[$_.Name]=$_.Value }
@@ -91,6 +93,11 @@ jobs:
             publication=false; productionAcceptance=false
           }
           $receipt | ConvertTo-Json -Depth 6 | Set-Content "$directory/artifact.json" -Encoding utf8
+          Write-Output 'Candidate identity, unsigned status, hashes and receipt verified'
+          # All native build exits and verification failures are checked above.
+          # Do not let a diagnostic cmdlet's native subprocess exit leak into the
+          # runner's implicit LASTEXITCODE epilogue after successful verification.
+          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: moyu-production-origin-${{ matrix.version }}-${{ github.sha }}
