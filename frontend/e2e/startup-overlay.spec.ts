@@ -127,12 +127,26 @@ test('desktop preference is saved and applied on next renderer launch', async ({
 });
 
 test('fast initialization preserves readable brand sequence and duplicate ready cannot extend it', async ({ page }) => {
-  await desktop(page); await page.clock.install(); await page.goto('/');
+  await desktop(page);
+  // install() alone keeps ticking between Playwright commands. On a loaded CI
+  // runner, locator/IPC round trips can consume the brand hold before runFor().
+  // Freeze before navigation so only the explicit elapsed intervals count.
+  const epoch = new Date('2026-10-21T00:00:00Z');
+  await page.clock.install({ time: epoch });
+  await page.clock.pauseAt(epoch);
+  await page.goto('/');
   const overlay = page.locator('#moyu-startup');
   await expect(overlay).toContainText('正在恢复播放队列');
   await page.evaluate(() => (window as any).testBoot.release());
-  await expect(overlay).toContainText('本地空间已就绪');
+  // Boot's last step awaits rendering frames. Advance only those frames until
+  // genuine readiness; freezing time must not prevent initialization itself.
+  await expect.poll(async () => {
+    await page.clock.runFor(16);
+    return overlay.locator('[role="status"]').textContent();
+  }).toBe('本地空间已就绪');
+  expect(await overlay.evaluate(el => performance.now() - Number((el as HTMLElement).dataset.startedAt))).toBeLessThan(500);
   await page.clock.runFor(1000);
+  await expect(overlay).toContainText('本地空间已就绪');
   await expect(overlay).toBeVisible();
   await page.evaluate(() => { window.moyuStartupOverlay?.ready(); window.moyuStartupOverlay?.stage('过期阶段'); });
   await expect(overlay).not.toContainText('过期阶段');
