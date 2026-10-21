@@ -85,6 +85,27 @@ jobs:
       - run: mvn --batch-mode test
       - run: mvn --batch-mode -DskipTests package
 
+  update-mysql:
+    name: Update policy MySQL transactions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Install server binary only for owned ephemeral databases
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes mysql-server-core-8.0
+          test -x /usr/sbin/mysqld
+      - name: Verify real policy row locks, commits, rollback and notifications
+        run: mvn --batch-mode -Dtest=ClientReleaseMysqlIT -Dmedia.mysql.binary=/usr/sbin/mysqld test
+
   deployment:
     name: Phase 12 deployment gates
     runs-on: ubuntu-latest
