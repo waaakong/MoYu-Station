@@ -322,6 +322,7 @@ public class ClientUpdateService {
     ReleaseView after = releaseById(releaseId);
     audit(actor.getId(), "RELEASE_POLICY_UPDATED", "release", String.valueOf(releaseId), before, after, request.getReason(), ipAddress);
     if (Set.of("PILOT", "ROLLING", "FULL").contains(status)) afterCommit(() -> socketHub.broadcast(after.channel(), after.releaseId(), after.version()));
+    afterCommit(() -> socketHub.broadcastPolicyChanged(after.channel(), after.releaseId(), after.version(), after.policyVersion()));
     return after;
   }
 

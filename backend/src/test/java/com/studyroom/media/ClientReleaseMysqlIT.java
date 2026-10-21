@@ -52,6 +52,7 @@ class ClientReleaseMysqlIT {
   @Test void commitBumpsVersionWritesOneAuditAndNotifiesOnlyAfterCommit(){
     tx.executeWithoutResult(s->{var value=service.updateReleasePolicy(actor(1),1L,request("PILOT","0"),"127.0.0.1");assertThat(value.policyVersion()).isEqualTo("1");verifyNoInteractions(hub);});
     assertThat(audits()).isEqualTo(1);verify(hub,times(1)).broadcast("stable","stable-0.3.1","0.3.1");
+    verify(hub).broadcastPolicyChanged("stable","stable-0.3.1","0.3.1","1");
     assertThatThrownBy(()->update(1,"PILOT","0")).isInstanceOf(BusinessException.class).hasMessageContaining("已被其他操作修改");
     assertThat(audits()).isEqualTo(1);verifyNoMoreInteractions(hub);
   }
@@ -61,7 +62,19 @@ class ClientReleaseMysqlIT {
       var r=request(target,"1");if(target.equals("ROLLING"))r.setRolloutPercentage(10);
       assertThatThrownBy(()->tx.execute(s->service.updateReleasePolicy(actor(1),1L,r,"local"))).isInstanceOf(BusinessException.class).hasMessageContaining("已撤回");
     }
-    assertThat(service.getRelease(1L).status()).isEqualTo("WITHDRAWN");assertThat(audits()).isEqualTo(1);verifyNoInteractions(hub);
+    assertThat(service.getRelease(1L).status()).isEqualTo("WITHDRAWN");assertThat(audits()).isEqualTo(1);
+    verify(hub).broadcastPolicyChanged("stable","stable-0.3.1","0.3.1","1");verifyNoMoreInteractions(hub);
+  }
+  @Test void pauseAndResumeNotifyDistinctRevisionsOnlyAfterCommit(){
+    update(1,"PILOT","0");org.mockito.Mockito.reset(hub);
+    tx.executeWithoutResult(s->{
+      service.updateReleasePolicy(actor(1),1L,request("PAUSED","1"),"local");
+      verifyNoInteractions(hub);
+    });
+    verify(hub).broadcastPolicyChanged("stable","stable-0.3.1","0.3.1","2");verifyNoMoreInteractions(hub);
+    org.mockito.Mockito.reset(hub);update(1,"PILOT","2");
+    verify(hub).broadcastPolicyChanged("stable","stable-0.3.1","0.3.1","3");
+    verify(hub).broadcast("stable","stable-0.3.1","0.3.1");verifyNoMoreInteractions(hub);
   }
   @Test void concurrentAdministratorsHaveExactlyOneWinner() throws Exception {
     var pool=Executors.newFixedThreadPool(2);var barrier=new CyclicBarrier(2);

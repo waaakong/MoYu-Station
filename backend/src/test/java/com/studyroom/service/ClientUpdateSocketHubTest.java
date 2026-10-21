@@ -9,6 +9,24 @@ import static org.mockito.ArgumentMatchers.any;
 
 class ClientUpdateSocketHubTest {
   @Test
+  void policyHintsCarryRevisionAndRevalidateAuthorization() throws Exception {
+    var session = mock(WebSocketSession.class);
+    when(session.isOpen()).thenReturn(true);
+    var valid = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var hub = new ClientUpdateSocketHub(new ObjectMapper());
+    hub.register(42L, session, socket -> { if (!valid.get()) throw new IllegalStateException("REVOKED"); });
+    hub.broadcastPolicyChanged("stable", "release-a", "0.3.0", "2");
+    var message = org.mockito.ArgumentCaptor.forClass(org.springframework.web.socket.WebSocketMessage.class);
+    verify(session).sendMessage(message.capture());
+    var payload = new ObjectMapper().readTree(message.getValue().getPayload().toString());
+    org.junit.jupiter.api.Assertions.assertEquals("CLIENT_UPDATE_POLICY_CHANGED", payload.path("type").asText());
+    org.junit.jupiter.api.Assertions.assertEquals("2", payload.path("payload").path("policyVersion").asText());
+    valid.set(false);
+    hub.broadcastPolicyChanged("stable", "release-a", "0.3.0", "3");
+    verify(session, times(1)).sendMessage(any());
+    verify(session).close(CloseStatus.POLICY_VIOLATION);
+  }
+  @Test
   void rechecksLiveAuthorizationBeforeEveryPushAndDisconnectsOnFailure() throws Exception {
     var session = mock(WebSocketSession.class);
     when(session.isOpen()).thenReturn(true);

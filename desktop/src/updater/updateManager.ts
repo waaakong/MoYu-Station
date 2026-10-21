@@ -95,6 +95,7 @@ export class UpdateManager {
   private prepareInstallation?: (signal: AbortSignal) => Promise<() => void>;
   private readonly intent: UpdateIntent;
   private intentView: UpdateIntentView = { phase: 'idle', waitReasons: [] };
+  private intentValidationTimer?: ReturnType<typeof setTimeout>;
 
   /** The host must bind the shared renderer save + native consistency backup first. */
   setInstallPreparation(prepare: (signal: AbortSignal) => Promise<() => void>) { this.prepareInstallation = prepare; }
@@ -196,6 +197,7 @@ export class UpdateManager {
       },
       changed: view => {
         this.intentView = view;
+        this.scheduleIntentValidation();
         if (view.phase === 'error') this.fail(new Error(view.error || 'UPDATE_INSTALL_FAILED'));
         else if (['countdown', 'preparing'].includes(view.phase)) this.transition({ state: view.phase as 'countdown' | 'preparing',
           message: view.phase === 'countdown' ? `${view.countdownSeconds} 秒后保存并重启，可取消。` : '正在保存并备份本机数据…' });
@@ -480,9 +482,10 @@ export class UpdateManager {
         } else this.configureUpdater(offer);
       }
       if (deferredUntil) this.scheduleCheckIn(deferredUntil - Date.now());
-      const busy = this.activity.focusActive || this.activity.audioActive;
+      const busy = this.activity.focusActive || this.activity.audioActive || this.activity.draftsActive;
       return this.transition({
-        state: deferredUntil ? "scheduled" : this.downloaded ? (busy ? "scheduled" : "downloaded") : sameOffer && this.downloadPromise ? "downloading" : mandatory ? "required" : "available",
+        state: this.intentView.phase === 'countdown' ? 'countdown' : this.intentView.phase === 'preparing' ? 'preparing'
+          : deferredUntil ? "scheduled" : this.downloaded ? (busy ? "scheduled" : "downloaded") : sameOffer && this.downloadPromise ? "downloading" : mandatory ? "required" : "available",
         availableVersion: offer.availableVersion,
         mandatory,
         releaseNotes: offer.releaseNotes ?? undefined,
@@ -649,6 +652,21 @@ export class UpdateManager {
     this.scheduleCheckIn(CHECK_INTERVAL_MS + jitter);
   }
 
+  /** Discovery preferences must not disable validation of an already authorized install. */
+  private scheduleIntentValidation(): void {
+    if (this.disposed || !this.authenticated || !['downloading', 'waiting', 'countdown'].includes(this.intentView.phase)) {
+      if (this.intentValidationTimer) clearTimeout(this.intentValidationTimer);
+      this.intentValidationTimer = undefined;
+      return;
+    }
+    // Frequent playback/draft activity reports must not postpone this deadline.
+    if (this.intentValidationTimer) return;
+    this.intentValidationTimer = setTimeout(() => {
+      this.intentValidationTimer = undefined;
+      void this.check(true).finally(() => this.scheduleIntentValidation());
+    }, 15_000);
+  }
+
   private scheduleCheckIn(delay: number): void {
     if (this.pollTimer) clearTimeout(this.pollTimer);
     if (!this.authenticated || this.disposed || !this.automaticChecks) return;
@@ -669,14 +687,20 @@ export class UpdateManager {
       const socket = new net.WebSocket(endpoint.href, this.cloud ? { session: this.cloud.session, useSessionCookies: true } : undefined) as unknown as WebSocket;
       this.socket = socket;
       const current = () => this.current(generation) && this.socket === socket;
-      socket.addEventListener("open", () => { if (current()) this.reconnectAttempt = 0; });
+      socket.addEventListener("open", () => {
+        if (!current()) return;
+        this.reconnectAttempt = 0;
+        this.lastPushKey = '';
+        // A policy change may have happened while this socket was disconnected.
+        void this.check(true);
+      });
       socket.addEventListener("message", (event) => {
         if (!current()) return;
         try {
           const envelope = JSON.parse(String(event.data));
           const pushChannel = String(envelope?.payload?.channel || "");
-          const pushKey = `${pushChannel}:${String(envelope?.payload?.releaseId || "")}`;
-          if (envelope?.type === "CLIENT_UPDATE_AVAILABLE" && pushChannel === this.config.channel && pushKey !== this.lastPushKey) {
+          const pushKey = `${String(envelope?.type)}:${pushChannel}:${String(envelope?.payload?.releaseId || "")}:${String(envelope?.payload?.policyVersion || "")}`;
+          if (["CLIENT_UPDATE_AVAILABLE", "CLIENT_UPDATE_POLICY_CHANGED"].includes(envelope?.type) && pushChannel === this.config.channel && pushKey !== this.lastPushKey) {
             this.lastPushKey = pushKey;
             void this.check(true);
           }

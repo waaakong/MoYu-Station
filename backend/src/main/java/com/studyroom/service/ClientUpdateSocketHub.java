@@ -50,6 +50,12 @@ public class ClientUpdateSocketHub {
     sessionsByUser.values().forEach(sessions -> sessions.forEach(session -> send(session, "CLIENT_UPDATE_AVAILABLE", payload)));
   }
 
+  /** Includes negative policy changes; clients must recheck rather than trust this hint. */
+  public void broadcastPolicyChanged(String channel, String releaseId, String version, String policyVersion) {
+    Map<String, String> payload = Map.of("channel", channel, "releaseId", releaseId, "version", version, "policyVersion", policyVersion);
+    sessionsByUser.values().forEach(sessions -> sessions.forEach(session -> send(session, "CLIENT_UPDATE_POLICY_CHANGED", payload)));
+  }
+
   @Scheduled(fixedDelayString = "${studyroom.client-updates.socket-auth-check-ms:30000}")
   public void validateIdleSessions() {
     validators.forEach((session, validator) -> {

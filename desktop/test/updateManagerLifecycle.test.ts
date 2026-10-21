@@ -113,6 +113,51 @@ it('receives a push notification and coalesces repeated notifications',async()=>
   const socket=doubles.sockets[0];const push=()=>socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({type:'CLIENT_UPDATE_AVAILABLE',payload:{channel:'stable',releaseId:'stable-0.3.0'}})}));
   push();push();await manager.check();expect(fetcher).toHaveBeenCalledTimes(2);
 });
+it('rechecks each committed policy revision of the same release, including pause and resume',async()=>{
+  const {manager,fetcher}=setup();await manager.setAuthState({authenticated:true});
+  const push=(policyVersion:string)=>doubles.sockets[0].dispatchEvent(new MessageEvent('message',{data:JSON.stringify({
+    type:'CLIENT_UPDATE_POLICY_CHANGED',payload:{channel:'stable',releaseId:'stable-0.3.0',policyVersion}
+  })}));
+  push('2');push('2');await vi.waitFor(()=>expect(manager.snapshot().state).toBe('available'));
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  push('3');await vi.waitFor(()=>expect(manager.snapshot().state).toBe('available'));
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
+it('rechecks authorization when the update socket reconnects after a missed policy change',async()=>{
+  const {manager,fetcher}=setup();await manager.setAuthState({authenticated:true});
+  doubles.sockets[0].close();await vi.advanceTimersByTimeAsync(1000);
+  fetcher.mockResolvedValueOnce(response({status:'not-available',currentVersion:'0.2.0',channel:'stable',mandatory:false,message:'Paused'}));
+  doubles.sockets[1].dispatchEvent(new Event('open'));
+  await vi.waitFor(()=>expect(manager.snapshot().state).toBe('not-available'));
+});
+it('revokes an armed busy update after missed policy push even with automatic discovery disabled',async()=>{
+  const {manager,fetcher}=setup(true,offer,{trustMode:'manifest-signed'});
+  const prepare=vi.fn(async()=>vi.fn());manager.setInstallPreparation(prepare);
+  await manager.setAuthState({authenticated:true,accountSession:'member-1:epoch-1'});
+  manager.setAutomaticChecks(false);
+  manager.setActivityState({focusActive:false,audioActive:false,draftsActive:true});
+  await manager.start();expect(manager.snapshot().updateIntent).toBe(true);
+  fetcher.mockResolvedValueOnce(response({status:'not-available',currentVersion:'0.2.0',channel:'stable',mandatory:false,message:'Paused'}));
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(manager.snapshot()).toMatchObject({state:'not-available',updateIntent:false});
+  expect(prepare).not.toHaveBeenCalled();expect(doubles.updaters[0].quitAndInstall).not.toHaveBeenCalled();
+  const calls=fetcher.mock.calls.length;await vi.advanceTimersByTimeAsync(60000);
+  expect(fetcher).toHaveBeenCalledTimes(calls);
+});
+it('keeps a draft-blocked intent scheduled after its periodic validation, and stops polling on cancel',async()=>{
+  const {manager,fetcher}=setup(true,offer,{trustMode:'manifest-signed'});
+  manager.setInstallPreparation(async()=>()=>{});
+  await manager.setAuthState({authenticated:true,accountSession:'member-1:epoch-1'});
+  manager.setAutomaticChecks(false);manager.setActivityState({focusActive:false,audioActive:false,draftsActive:true});
+  await manager.start();
+  for(let i=0;i<15;i++) {
+    await vi.advanceTimersByTimeAsync(1000);
+    manager.setActivityState({focusActive:false,audioActive:false,draftsActive:true});
+  }
+  expect(manager.snapshot()).toMatchObject({state:'scheduled',updateIntent:true,waitReasons:['drafts']});
+  manager.cancelDownload();const calls=fetcher.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(60000);expect(fetcher).toHaveBeenCalledTimes(calls);
+});
 it('downloads in the isolated double and defers installation while audio is active',async()=>{
   const {manager}=setup(true);await manager.setAuthState({authenticated:true});manager.setActivityState({focusActive:false,audioActive:true});
   expect((await manager.download()).state).toBe('scheduled');await manager.install();
