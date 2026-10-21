@@ -50,6 +50,7 @@ import { updaterBuildChannel, updaterBuildConfig } from "../updater/updateBuildC
 import { expectedAppId } from "../updater/updateSecurity";
 import { LocalProfileService } from "../profile/localProfileService";
 import {DesktopMusic} from './music/desktopMusic';
+import { DEFAULT_DESKTOP_MUSIC } from "./music/shortcuts";
 let desktopMusic:DesktopMusic|undefined;
 
 registerMediaScheme();
@@ -103,6 +104,14 @@ function providerWorkerPath(): string {
 }
 
 async function verifySmokeRoutes(window: BrowserWindow): Promise<void> {
+  if (!window.isVisible()) throw new Error("Electron smoke requires a visible window");
+  const music = await window.webContents.executeJavaScript(
+    "window.studyRoomDesktop.getDesktopMusic()", true
+  ) as { settings?: { shortcutsEnabled?: boolean }; error?: string };
+  if (music.settings?.shortcutsEnabled !== false || music.error) {
+    throw new Error("Electron smoke music IPC unavailable or global shortcuts not isolated");
+  }
+  console.log("STUDYROOM_ELECTRON_MUSIC_IPC_OK");
   const routes = [
     { hash: "/scene", triggerSelector: ".start", pageSelector: ".scene-page", detailSelector: '[aria-label="内置场景"]' },
     { hash: "/focus", triggerSelector: ".enter-scene", pageSelector: ".focus-page", detailSelector: ".timer" }
@@ -244,7 +253,9 @@ async function startApplication(): Promise<void> {
     },
     (rootId) => databaseStore?.setLibraryRootWatchState(rootId, "attention")
   );
-  windowManager = new MainWindowManager(preloadPath(), databaseStore, !smokeTest);
+  // Smoke must exercise a visible, painted window too. Hidden Chromium windows
+  // can defer animation frames and leave scene layers in their placeholder state.
+  windowManager = new MainWindowManager(preloadPath(), databaseStore);
   const brandIcon = nativeImage.createFromPath(join(app.getAppPath(), "dist/brand/app-256.png"));
   if (!brandIcon.isEmpty()) windowManager.window.setIcon(brandIcon);
   configureNavigationSecurity(windowManager.window.webContents, (url) => shell.openExternal(url));
@@ -354,7 +365,12 @@ async function startApplication(): Promise<void> {
     databaseStore.setLibraryRootWatchState(root.id, started ? "watching" : "attention");
   }
 
-  if(!smokeTest)desktopMusic=new DesktopMusic(windowManager.window,databaseStore);
+  // Keep the real IPC surface in smoke tests without taking global media keys
+  // from another application. Smoke always uses its own temporary user data.
+  if (smokeTest) databaseStore.setSetting("music.desktop-v1", {
+    ...structuredClone(DEFAULT_DESKTOP_MUSIC), shortcutsEnabled: false
+  });
+  desktopMusic = new DesktopMusic(windowManager.window, databaseStore);
   // An HTML document can load successfully even when its module bundle is missing.
   // Native recovery is allowed only before App setup binds the save-aware runtime.
   if (!smokeTest) {
@@ -401,6 +417,7 @@ async function startApplication(): Promise<void> {
     }
   }
   if (smokeTest) {
+    windowManager.window.show();
     await verifySmokeRoutes(windowManager.window);
     console.log("STUDYROOM_ELECTRON_SMOKE_OK");
     windowManager.setQuitting(true);

@@ -58,7 +58,7 @@ try {
     });
   });
 
-  if (exitCode !== 0 || !stdout.includes("STUDYROOM_ELECTRON_SMOKE_OK") || !stdout.includes("STUDYROOM_ELECTRON_ROUTE_OK scene focus")) {
+  if (exitCode !== 0 || !stdout.includes("STUDYROOM_ELECTRON_SMOKE_OK") || !stdout.includes("STUDYROOM_ELECTRON_ROUTE_OK scene focus") || !stdout.includes("STUDYROOM_ELECTRON_MUSIC_IPC_OK")) {
     throw new Error(`Electron smoke test failed (exit ${exitCode})\n${stderr}`);
   }
   console.log(`Electron window smoke test passed in ${Date.now() - startedAt}ms.`);
