@@ -66,12 +66,39 @@ test("web login hides remember-me and submits a non-persistent session", async (
 
 test("login supports keyboard order, password visibility and caps-lock feedback", async ({ page }) => {
   await routeAuth(page);
+  await page.addInitScript(() => {
+    const events: { type: string; focused: boolean; visibility: string; active: string; passwordType: string | null }[] = [];
+    Object.defineProperty(window, "__passwordFocusEvidence", { value: events });
+    const record = (event: Event) => {
+      events.push({
+        type: event.type, focused: document.hasFocus(), visibility: document.visibilityState,
+        active: document.activeElement?.id || document.activeElement?.tagName || "",
+        passwordType: document.getElementById("login-password")?.getAttribute("type") || null
+      });
+      if (events.length > 32) events.shift();
+    };
+    window.addEventListener("blur", record);
+    document.addEventListener("visibilitychange", record);
+    document.addEventListener("focusin", record, true);
+    document.addEventListener("focusout", record, true);
+    document.addEventListener("click", record, true);
+  });
   await page.goto("/login");
+  // Revealing a password is a foreground interaction. A real window blur must
+  // still conceal it; never weaken that safety behavior to stabilize this test.
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.hasFocus() && !document.hidden)).toBe(true);
   await page.getByLabel("用户名").focus();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("密码", { exact: true })).toBeFocused();
   await page.getByRole("button", { name: "显示密码" }).click();
-  await expect(page.getByLabel("密码", { exact: true })).toHaveAttribute("type", "text");
+  try {
+    await expect(page.getByLabel("密码", { exact: true })).toHaveAttribute("type", "text");
+  } catch (error) {
+    console.log("Password focus evidence (no input values):", await page.evaluate(() =>
+      (window as unknown as { __passwordFocusEvidence: unknown }).__passwordFocusEvidence));
+    throw error;
+  }
   await page.getByLabel("密码", { exact: true }).focus();
   await page.getByLabel("密码", { exact: true }).evaluate((input) => {
     const event = new KeyboardEvent("keyup", { key: "A", bubbles: true });
@@ -79,6 +106,25 @@ test("login supports keyboard order, password visibility and caps-lock feedback"
     input.dispatchEvent(event);
   });
   await expect(page.getByText("大写锁定已开启")).toBeVisible();
+});
+
+test("revealed passwords conceal when focus leaves the control and on window blur", async ({ page }) => {
+  await routeAuth(page);
+  await page.goto("/login");
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.hasFocus() && !document.hidden)).toBe(true);
+  const password = page.getByLabel("密码", { exact: true });
+  await password.fill("synthetic-visibility-only");
+  await page.getByRole("button", { name: "显示密码", exact: true }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await page.getByLabel("用户名", { exact: true }).focus();
+  await expect(password).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "显示密码", exact: true }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  // A bounded event-handler regression, not a claim of physical OS blur testing.
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect(password).toHaveAttribute("type", "password");
+  await expect(password).toHaveValue("synthetic-visibility-only");
 });
 
 test("desktop login exposes remember-me and sends the explicit choice", async ({ page }) => {
