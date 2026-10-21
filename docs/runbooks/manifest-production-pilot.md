@@ -4,7 +4,7 @@ Status: preparation only; not a deployment or acceptance report.
 
 ## Fixed candidate configuration
 
-- Installed bootstrap: `0.2.0-trial.20261021.1`; upgrade candidate: `0.2.0-trial.20261021.3`. The immutable `.2` candidate is held because native installer launch failures were misclassified as network errors; it must not be overwritten or offered.
+- Installed bootstrap: `0.2.0-trial.20261021.1`; next fixed candidate: `0.2.0-trial.20261021.4`. Immutable `.2` and `.3` candidates are held and must not be overwritten or offered. Real native-fault acceptance exposed premature application exit during installer launch failure and backup failures misclassified as network errors.
 - Base reviewed product source: `7602a1a265a86c8271799e96088de316b1a5aa74`.
 - Actual candidate source is the full commit in its CI artifact receipt, including this build configuration. Earlier CI results do not automatically validate that new commit.
 - Production origin: `https://8.163.29.26`, API `/api`, stable channel, `manifest-signed`, checked-in Ed25519 public keys. No temporary 8443 endpoint.
@@ -13,7 +13,7 @@ Status: preparation only; not a deployment or acceptance report.
 
 The dedicated CI workflow has read-only repository permissions and uploads short-lived candidate artifacts only. It neither signs manifests nor creates a GitHub Release, changes production policy, or installs anything. Signing is performed separately using the restricted local key, outside CI and outside the repository. Artifact receipts include source, version, public-key digest, configuration and file sizes/SHA-256; verification must additionally inspect the packaged runtime configuration.
 
-The candidate workflow is manually dispatched from reviewed `main`, not from the deleted development branch. Its fixed `.3` version and artifact source SHA prevent accidentally rebuilding the handed-off `.1` or `.2` files under the same identity.
+The candidate workflow is manually dispatched from reviewed `main`, not from the deleted development branch. Its fixed `.4` version and artifact source SHA prevent accidentally rebuilding the handed-off `.1`, `.2` or `.3` files under the same identity. Do not dispatch before reviewing and freezing the new fixes.
 
 ## Gates before production execution
 
@@ -28,6 +28,10 @@ The candidate workflow is manually dispatched from reviewed `main`, not from the
 Use a specifically confirmed single account for the first pilot. Keep audience `members`; verify that the stable membership contains only that authorized pilot before activating a `PILOT` release. Do not infer an empty membership table from a failed query. Keep beta/experimental scope unchanged.
 
 The manual bootstrap installer must be installed before an old client can gain the new trust configuration. Verify bootstrap to upgrade using the real production authorization path, including automatic restart, original installation path, current version and preserved data.
+
+The same rule applies to updater bug fixes: a target installer cannot repair the already-running bootstrap before its first handoff. Request explicit confirmation of a replacement bootstrap route before changing the user's requirement to upgrade the formal client through push. Do not waive the failed native-startup gate or silently replace the formal installation.
+
+The confirmed-launch adapter is used only by manifest-signed per-user full installers. It preserves upstream verification and NSIS argument generation and waits for the actual spawn event before quitting. Native execution denial does not authorize shell/elevation fallback; administrator-required packages fail closed for manual installation. The trusted updater remains unchanged. Revalidate this adapter whenever the pinned electron-updater version changes.
 
 Only after pilot acceptance may registered stable rollout proceed manually at 10%, 50%, then 100%, checking failures between stages. No timer automatically increases exposure. Pause on any installation or data error.
 

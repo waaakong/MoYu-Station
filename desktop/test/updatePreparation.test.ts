@@ -38,3 +38,24 @@ it('rejects free-form fields, paths, URLs and credential backup keys at the IPC 
   }
   expect(updatePreparationResultSchema.safeParse({ ...valid, path: 'C:/outside' }).success).toBe(false);
 });
+
+it.each([
+  [Object.assign(new Error('EEXIST: synthetic occupied backup directory'), {code:'EEXIST'}), 'UPDATE_SAVE_UNAVAILABLE'],
+  [Object.assign(new Error('EACCES: synthetic backup write denied'), {code:'EACCES'}), 'UPDATE_SAVE_UNAVAILABLE'],
+  [new Error('UPDATE_BACKUP_INVALID'), 'UPDATE_SAVE_UNAVAILABLE'],
+  [Object.assign(new Error('ENOSPC: synthetic disk full'), {code:'ENOSPC'}), 'UPDATE_DISK_INSUFFICIENT'],
+  [new Error('SQLITE_FULL: database or disk is full'), 'UPDATE_DISK_INSUFFICIENT']
+])('classifies real save/backup errors without reporting a network failure: %s', async(error, expected) => {
+  const window = windowMock(), release = vi.fn(), backup = vi.fn<() => () => void>();
+  backup.mockImplementationOnce(() => { throw error; }).mockReturnValueOnce(release);
+  const preparation = new UpdatePreparation(window as never, backup);
+  const first = preparation.prepare(new AbortController().signal);
+  const rejected = expect(first).rejects.toThrow(expected);
+  const id = window.webContents.send.mock.calls[0]![1].id;
+  preparation.complete({id,ready:true});await rejected;
+  // A failed preparation must not strand a pending request or block fresh work.
+  const next = preparation.prepare(new AbortController().signal);
+  const nextId = window.webContents.send.mock.calls[1]![1].id;
+  expect(nextId).not.toBe(id);preparation.complete({id:nextId,ready:true});
+  expect(await next).toBe(release);
+});

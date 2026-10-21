@@ -23,7 +23,14 @@ export class UpdatePreparation {
         if (!value.ready || signal.aborted) { fail(new Error('UPDATE_SAVE_UNAVAILABLE')); return; }
         cleanup();
         try { resolve(this.backup(value.rendererState || {})); }
-        catch (error) { reject(error); }
+        catch (error) {
+          const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+          const message = error instanceof Error ? error.message : '';
+          const full = /ENOSPC|SQLITE_FULL|UPDATE_DISK_INSUFFICIENT|database or disk is full/i.test(`${code} ${message}`);
+          // This boundary only saves local data; filesystem and integrity errors
+          // must not escape as an unrelated download/network failure.
+          reject(new Error(full ? 'UPDATE_DISK_INSUFFICIENT' : 'UPDATE_SAVE_UNAVAILABLE'));
+        }
       } };
       signal.addEventListener('abort', abort, { once: true });
       try { this.window.webContents.send(IPC_CHANNELS.prepareUpdate, { id }); }

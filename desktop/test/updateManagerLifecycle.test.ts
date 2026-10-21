@@ -25,6 +25,12 @@ vi.mock('electron-updater', () => ({ NsisUpdater: class {
   removeAllListeners() { this.handlers.clear(); }
 } }));
 import { UpdateManager, safeUpdateErrorCode } from '../src/updater/updateManager';
+// Lifecycle tests retain their isolated updater double; the native adapter's
+// actual upstream NSIS logic is exercised separately, without replacing checks.
+vi.mock('../src/updater/launchConfirmedNsisUpdater', async () => {
+  const { NsisUpdater } = await import('electron-updater');
+  return { LaunchConfirmedNsisUpdater: class extends NsisUpdater { readonly confirmedLaunchAdapter = true; } };
+});
 import { net } from 'electron';
 
 const feedBytes=Buffer.from('fixture feed bytes'),installerBytes=Buffer.from('fixture installer bytes');
@@ -97,6 +103,10 @@ it('checks a signed offer after login and blocks unsigned installation',async()=
   const {manager}=setup();expect((await manager.setAuthState({authenticated:true})).state).toBe('available');
   expect((await manager.download()).errorCode).toBe('UPDATE_CODE_SIGNATURE_REQUIRED');
   expect(doubles.updaters).toHaveLength(0);
+});
+it.each(['manifest-signed','trusted'] as const)('uses the confirmed launch adapter only for manifest-signed mode: %s',async trustMode=>{
+  const {manager}=setup(true,offer,{trustMode});await manager.setAuthState({authenticated:true});
+  expect(doubles.updaters[0].confirmedLaunchAdapter===true).toBe(trustMode==='manifest-signed');
 });
 it('receives a push notification and coalesces repeated notifications',async()=>{
   const {manager,fetcher}=setup();await manager.setAuthState({authenticated:true});

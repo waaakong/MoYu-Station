@@ -16,6 +16,7 @@ import { canFallbackToServer, fetchUpdateFeed, isGithubFeed } from './updateTran
 import { installUpdateNetworkGuard } from './updateNetworkGuard';
 import { createHash } from 'node:crypto';
 import { UpdateIntent, type UpdateTarget, type UpdateIntentView } from './updateIntent';
+import { LaunchConfirmedNsisUpdater } from './launchConfirmedNsisUpdater';
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CHECK_JITTER_MS = 15 * 60 * 1000;
@@ -574,7 +575,8 @@ export class UpdateManager {
   private configureUpdater(offer: PreparedOffer): void {
     // Each account channel already has an isolated, versioned feed directory;
     // keep the Generic provider metadata filename at electron-builder's latest.yml default.
-    const updater = new NsisUpdater({ provider: "generic", url: offer.feedUrl });
+    const Updater = this.config.trustMode === 'manifest-signed' ? LaunchConfirmedNsisUpdater : NsisUpdater;
+    const updater = new Updater({ provider: "generic", url: offer.feedUrl });
     updater.autoDownload = false;
     // Only the application's normal-quit hook may install, after its data is saved.
     updater.autoInstallOnAppQuit = false;
