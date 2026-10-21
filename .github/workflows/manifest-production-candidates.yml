@@ -1,8 +1,7 @@
 name: Manifest-signed production-origin candidates (no publication)
 
 on:
-  push:
-    branches: [codex/manifest-production-pilot-20261021]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['0.2.0-trial.20261021.1', '0.2.0-trial.20261021.2']
+        version: ['0.2.0-trial.20261021.3']
     defaults:
       run:
         shell: pwsh

@@ -190,7 +190,8 @@ export class UpdateManager {
         if (!this.canInstall() || !this.updater) throw new Error('UPDATE_NOT_DOWNLOADED');
         this.installStarted = true;
         this.transition({ state: 'installing', message: '正在退出并安装更新，完成后将重新启动。', canRetry: false });
-        this.updater.quitAndInstall(true, true);
+        try { this.updater.quitAndInstall(true, true); }
+        catch (error) { throw nativeInstallError(error); }
       },
       changed: view => {
         this.intentView = view;
@@ -414,7 +415,7 @@ export class UpdateManager {
     this.transition({ state: 'installing', message: '正在退出并安装更新，完成后将重新启动。', canRetry: false });
     // Keep the error listener alive until app's actual will-quit; spawning NSIS can still fail.
     try { updater.quitAndInstall(true, true); }
-    catch { this.fail(new Error('UPDATE_INSTALL_FAILED')); throw new Error('UPDATE_INSTALL_FAILED'); }
+    catch (error) { const failure = nativeInstallError(error); this.fail(failure); throw failure; }
   }
 
   handleResume(): void {
@@ -599,7 +600,7 @@ export class UpdateManager {
       this.transition({ state: "downloading", progressPercent: Math.max(0, Math.min(100, progress.percent)), message: "正在安全下载更新。" });
     });
     // Awaited download errors are handled in performDownload, including bounded fallback.
-    updater.on("error", (error) => { if (current() && this.status.state !== 'downloading') this.fail(this.installStarted ? new Error('UPDATE_INSTALL_FAILED') : error); });
+    updater.on("error", (error) => { if (current() && this.status.state !== 'downloading') this.fail(this.installStarted ? nativeInstallError(error) : error); });
     this.updater = updater;
   }
 
@@ -704,6 +705,13 @@ export class UpdateManager {
     this.socket = undefined;
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
   }
+}
+
+function nativeInstallError(error: unknown): Error {
+  const code = safeUpdateErrorCode(error);
+  // A native launch failure is not a download failure. Keep more specific
+  // signature, storage and authorization errors rather than hiding their cause.
+  return new Error(code === 'UPDATE_NETWORK_FAILED' ? 'UPDATE_INSTALL_FAILED' : code);
 }
 
 export function safeUpdateErrorCode(error: unknown): UpdateErrorCode {

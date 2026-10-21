@@ -563,6 +563,24 @@ test("manages favorites playlists and per-track lyric offsets transactionally", 
   });
 });
 
+test('failed update backup does not freeze or overwrite the live database', () => {
+  withTemporaryDirectory(directory => {
+    const initialized = initializeLocalDatabase(join(directory, 'studyroom.sqlite'));
+    const store = new LocalDatabaseStore(initialized.database);
+    try {
+      store.setSetting('update-failure-preservation', { queue: ['synthetic-track'], volume: 0.37 });
+      const blocked = join(directory, 'not-a-backup-directory');
+      writeFileSync(blocked, 'owned synthetic blocking file');
+      assert.throws(() => store.prepareUpdateBackup(blocked, {}));
+      assert.equal(store.isUpdateFrozen(), false);
+      assert.deepEqual(store.getSetting('update-failure-preservation'), { queue: ['synthetic-track'], volume: 0.37 });
+      store.setSetting('after-failed-update-backup', true);
+      assert.equal(store.getSetting('after-failed-update-backup'), true);
+      assert.equal(readFileSync(blocked, 'utf8'), 'owned synthetic blocking file');
+    } finally { store.close(); }
+  });
+});
+
 test("stores schema v7 provider metadata without private fields or remote URLs", () => {
   withTemporaryDirectory((directory) => {
     const initialized = initializeLocalDatabase(join(directory, "studyroom.sqlite"));

@@ -4,7 +4,7 @@ Status: preparation only; not a deployment or acceptance report.
 
 ## Fixed candidate configuration
 
-- Bootstrap candidate: `0.2.0-trial.20261021.1`; upgrade candidate: `0.2.0-trial.20261021.2`.
+- Installed bootstrap: `0.2.0-trial.20261021.1`; upgrade candidate: `0.2.0-trial.20261021.3`. The immutable `.2` candidate is held because native installer launch failures were misclassified as network errors; it must not be overwritten or offered.
 - Base reviewed product source: `7602a1a265a86c8271799e96088de316b1a5aa74`.
 - Actual candidate source is the full commit in its CI artifact receipt, including this build configuration. Earlier CI results do not automatically validate that new commit.
 - Production origin: `https://8.163.29.26`, API `/api`, stable channel, `manifest-signed`, checked-in Ed25519 public keys. No temporary 8443 endpoint.
@@ -12,6 +12,8 @@ Status: preparation only; not a deployment or acceptance report.
 - Installers remain Authenticode unsigned. Windows prompts and UAC are not bypassed. The trusted release workflow remains unchanged.
 
 The dedicated CI workflow has read-only repository permissions and uploads short-lived candidate artifacts only. It neither signs manifests nor creates a GitHub Release, changes production policy, or installs anything. Signing is performed separately using the restricted local key, outside CI and outside the repository. Artifact receipts include source, version, public-key digest, configuration and file sizes/SHA-256; verification must additionally inspect the packaged runtime configuration.
+
+The candidate workflow is manually dispatched from reviewed `main`, not from the deleted development branch. Its fixed `.3` version and artifact source SHA prevent accidentally rebuilding the handed-off `.1` or `.2` files under the same identity.
 
 ## Gates before production execution
 
@@ -34,3 +36,5 @@ Every formal client release must synchronize the installer, authenticated downlo
 ## Existing evidence and remaining limitations
 
 Reviewed source `7602a1a` passed two complete CI attempts and a real Windows Sandbox `.5 → .6` one-click download/install/restart with synthetic data and consistent backup retention. That evidence uses an isolated synthetic HTTPS control plane; it is not production authorization acceptance. Real fault-matrix completion, production-origin artifact validation, production pilot and full release synchronization remain separate gates.
+
+The frozen business backend subsequently passed 18 checks against a separate synthetic MySQL database, Linux Redis, verified HTTPS and WSS: eligibility, two sessions, revocations, bounded grant expiry, pause/withdrawal, Redis recovery and bounded login-rate limiting. The capped temporary services have stopped and their ports are closed. Component tests cover native launch errors, disk exhaustion and real SQLite backup failure; these are not evidence of the complete physical installer fault matrix or the `.1 → .3` production pilot.

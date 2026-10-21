@@ -368,3 +368,44 @@ it('keeps installer failure visible and prevents duplicate installation requests
   updater.emit('error',new Error('spawn failed'));
   expect(manager.snapshot()).toMatchObject({state:'error',canInstall:false,canRetry:true});
 });
+
+it('one-click disk exhaustion cancels installation before any save or native launch',async()=>{
+  const {manager}=setup(true,offer,{trustMode:'manifest-signed'});
+  const prepare=vi.fn(async()=>vi.fn());manager.setInstallPreparation(prepare);
+  await manager.setAuthState({authenticated:true,accountSession:'disk-fixture:epoch-1'});
+  const updater=doubles.updaters[0];
+  updater.downloadUpdate.mockRejectedValueOnce(Object.assign(new Error('ENOSPC: no space left on device'),{code:'ENOSPC'}));
+  await manager.start();
+  expect(manager.snapshot()).toMatchObject({state:'error',errorCode:'UPDATE_DISK_INSUFFICIENT',canInstall:false,canRetry:true,updateIntent:false});
+  expect(prepare).not.toHaveBeenCalled();expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  manager.dispose(true);expect(updater.quitAndInstall).not.toHaveBeenCalled();
+});
+
+it('one-click native launch failure releases the save freeze and keeps the current app usable',async()=>{
+  const {manager}=setup(true,offer,{trustMode:'manifest-signed'});
+  const release=vi.fn();manager.setInstallPreparation(vi.fn(async()=>release));
+  await manager.setAuthState({authenticated:true,accountSession:'spawn-fixture:epoch-1'});
+  const updater=doubles.updaters[0];updater.quitAndInstall.mockImplementation(()=>{throw new Error('synthetic native spawn failure');});
+  await manager.start();await vi.advanceTimersByTimeAsync(5000);
+  await vi.waitFor(()=>expect(manager.snapshot().state).toBe('error'));
+  expect(manager.snapshot()).toMatchObject({errorCode:'UPDATE_INSTALL_FAILED',canInstall:false,canRetry:true,updateIntent:false});
+  expect(updater.quitAndInstall).toHaveBeenCalledOnce();expect(release).toHaveBeenCalledOnce();
+  manager.dispose(true);expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+});
+
+it.each([
+  [new Error('synthetic asynchronous spawn failure'),'UPDATE_INSTALL_FAILED'],
+  [Object.assign(new Error('certificate validation failed'),{code:'ERR_UPDATER_INVALID_SIGNATURE'}),'UPDATE_CODE_SIGNATURE_INVALID'],
+  [new Error('ENOSPC: no space left on device'),'UPDATE_DISK_INSUFFICIENT']
+])('preserves the cause and releases the save freeze after a native install error: %s',async(error,errorCode)=>{
+  const {manager}=setup(true,offer,{trustMode:'manifest-signed'});
+  const release=vi.fn();manager.setInstallPreparation(vi.fn(async()=>release));
+  await manager.setAuthState({authenticated:true,accountSession:'async-spawn-fixture:epoch-1'});
+  const updater=doubles.updaters[0];
+  await manager.start();await vi.advanceTimersByTimeAsync(5000);
+  await vi.waitFor(()=>expect(manager.snapshot().state).toBe('installing'));
+  updater.emit('error',error);
+  expect(manager.snapshot()).toMatchObject({state:'error',errorCode,canInstall:false,updateIntent:false});
+  expect(release).toHaveBeenCalledOnce();
+  manager.dispose(true);expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+});
