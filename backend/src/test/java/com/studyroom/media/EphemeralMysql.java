@@ -34,7 +34,8 @@ final class EphemeralMysql implements AutoCloseable {
     if (!data.startsWith(scratch.toRealPath())) throw new IOException("Test data directory escaped scratch root");
     try (var contents = Files.list(data)) { if (contents.findAny().isPresent()) throw new IOException("Data directory is not empty"); }
     var common = new ArrayList<>(List.of(binary.toString(), "--no-defaults", "--basedir=" + binary.getParent().getParent(),
-        "--datadir=" + data, "--innodb-buffer-pool-size=32M", "--innodb-redo-log-capacity=8M"));
+        "--datadir=" + data, "--secure-file-priv=" + run,
+        "--innodb-buffer-pool-size=32M", "--innodb-redo-log-capacity=8M"));
     if (System.getProperty("os.name").startsWith("Windows")) common.add("--no-monitor");
     var init = new ArrayList<>(common); init.add("--initialize-insecure"); init.add("--console");
     Process initialization = start(init, run.resolve("initialize.log"));
@@ -48,6 +49,7 @@ final class EphemeralMysql implements AutoCloseable {
     Path pid = run.resolve("mysql.pid");
     var command = new ArrayList<>(common);
     command.addAll(List.of("--console", "--bind-address=127.0.0.1", "--port=" + port, "--mysqlx=OFF",
+        "--socket=" + run.resolve("mysql.sock"),
         "--skip-log-bin", "--max-connections=16", "--pid-file=" + pid, "--local-infile=OFF"));
     Process server = start(command, run.resolve("server.log"));
     var instance = new EphemeralMysql(data, pid, server, port);
@@ -62,7 +64,13 @@ final class EphemeralMysql implements AutoCloseable {
           ready = true; break;
         } catch (SQLException unavailable) { lastConnectionFailure = unavailable; Thread.sleep(100); }
       }
-      if (!ready) throw new IOException("Isolated MySQL did not become ready; see " + run.resolve("server.log"), lastConnectionFailure);
+      if (!ready) {
+        // Package defaults may point outside this owned directory. Keep bounded
+        // startup diagnostics even when JUnit later removes its temporary files.
+        var lines = Files.readAllLines(run.resolve("server.log"));
+        var tail = String.join("\n", lines.subList(Math.max(0, lines.size() - 16), lines.size()));
+        throw new IOException("Isolated MySQL did not become ready; owned startup log:\n" + tail, lastConnectionFailure);
+      }
       return instance;
     } catch (Exception failure) { instance.close(); throw failure; }
   }
