@@ -81,4 +81,85 @@ describe("private updater renderer boundary", () => {
     store.acceptStatus({ state: 'available', revision: 19, currentVersion: '0.2.0', channel: 'stable', availableVersion: '0.2.1', updateIntent: false });
     expect(store.status).toMatchObject({ revision: 20, availableVersion: '0.3.0', updateIntent: true, countdownSeconds: 4 });
   });
+
+  const active = { state: 'countdown', revision: 20, currentVersion: '0.2.0', channel: 'stable', updateIntent: true } as const;
+  const diskFailure = { ...active, state: 'error', revision: 21, updateIntent: false, errorCode: 'UPDATE_DISK_INSUFFICIENT', message: '磁盘空间不足，请释放空间后重试。', canRetry: true } as const;
+
+  it('keeps the terminal reason independent of revoked installation intent and later background states', () => {
+    const store = useUpdatesStore(); store.acceptStatus(active); store.acceptStatus(diskFailure);
+    expect(store.failureNotice).toMatchObject({ errorCode: diskFailure.errorCode, message: diskFailure.message, canRetry: true });
+    expect(store.status.updateIntent).toBe(false);
+    store.acceptStatus({ ...diskFailure, state: 'checking', revision: 22 });
+    expect(store.failureNotice?.errorCode).toBe(diskFailure.errorCode);
+  });
+
+  it('dismisses only the notice, without IPC or redisplaying a duplicate terminal status', () => {
+    const startUpdate=vi.fn(),checkForUpdates=vi.fn(),cancelUpdateDownload=vi.fn();
+    window.studyRoomDesktop={startUpdate,checkForUpdates,cancelUpdateDownload} as never;
+    const store=useUpdatesStore();store.acceptStatus(active);store.acceptStatus(diskFailure);store.dismissFailureNotice();
+    store.acceptStatus({ ...diskFailure, revision: 22 });
+    expect(store.failureNotice).toBeUndefined();expect(store.status.updateIntent).toBe(false);
+    expect(startUpdate).not.toHaveBeenCalled();expect(checkForUpdates).not.toHaveBeenCalled();expect(cancelUpdateDownload).not.toHaveBeenCalled();
+  });
+
+  it('shows the same error again after a genuinely new explicit attempt', async () => {
+    window.studyRoomDesktop={startUpdate:vi.fn().mockResolvedValue({...diskFailure,revision:22})} as never;
+    const store=useUpdatesStore();store.acceptStatus(active);store.acceptStatus(diskFailure);store.dismissFailureNotice();
+    await store.start();expect(store.failureNotice?.errorCode).toBe(diskFailure.errorCode);expect(store.status.updateIntent).toBe(false);
+  });
+
+  it('does not promote an unrelated background error to a persistent operation notice', () => {
+    const store=useUpdatesStore();store.acceptStatus(diskFailure);expect(store.failureNotice).toBeUndefined();
+  });
+
+  it('never lets a stale IPC error replace the active operation or its notification', () => {
+    const store=useUpdatesStore();store.acceptStatus(active);store.acceptStatus({...diskFailure,revision:19});
+    expect(store.failureNotice).toBeUndefined();expect(store.status.updateIntent).toBe(true);
+  });
+
+  it('rechecks explicitly without granting installation or calling download/start', async () => {
+    const checkForUpdates=vi.fn().mockResolvedValue({...active,state:'available',revision:22,updateIntent:false});
+    const startUpdate=vi.fn(),downloadUpdate=vi.fn();window.studyRoomDesktop={checkForUpdates,startUpdate,downloadUpdate} as never;
+    const store=useUpdatesStore();store.acceptStatus(active);store.acceptStatus(diskFailure);await store.check();
+    expect(checkForUpdates).toHaveBeenCalledOnce();expect(store.failureNotice).toBeUndefined();expect(store.status.updateIntent).toBe(false);
+    expect(startUpdate).not.toHaveBeenCalled();expect(downloadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('uses a safe reason for rejected IPC instead of leaking raw exception data', async () => {
+    window.studyRoomDesktop={startUpdate:vi.fn().mockRejectedValue(new Error('synthetic-private-path'))} as never;
+    const store=useUpdatesStore();await store.start();expect(store.failureNotice?.message).toContain('更新未开始');
+    expect(store.failureNotice?.message).not.toContain('private');
+  });
+
+  it('clears notifications on logout, account-session replacement and disposal', () => {
+    const store=useUpdatesStore();store.synchronizeNoticeIdentity(true,'member-2:epoch-1');
+    store.acceptStatus(active);store.acceptStatus(diskFailure);store.synchronizeNoticeIdentity(true,'member-2:epoch-1');
+    expect(store.failureNotice).toBeDefined();store.synchronizeNoticeIdentity(true,'member-3:epoch-1');expect(store.failureNotice).toBeUndefined();
+    store.acceptStatus({...active,revision:22});store.acceptStatus({...diskFailure,revision:23});store.synchronizeNoticeIdentity(false);expect(store.failureNotice).toBeUndefined();
+    store.acceptStatus({...active,revision:24});store.acceptStatus({...diskFailure,revision:25});store.dispose();expect(store.failureNotice).toBeUndefined();
+  });
+
+  it('does not rebuild an old account notice from an auth reply after identity has been cleared', async () => {
+    window.studyRoomDesktop={setUpdaterAuthState:vi.fn().mockResolvedValue(diskFailure)} as never;
+    const store=useUpdatesStore();store.synchronizeNoticeIdentity(true,'member-2:epoch-1');store.acceptStatus(active);
+    await store.setAuthenticated(false);expect(store.failureNotice).toBeUndefined();expect(store.status.updateIntent).toBe(false);
+  });
+
+  it('ignores a rejected operation after logout instead of restoring its old account notice', async () => {
+    let reject!: (reason?: unknown) => void;
+    const pending=new Promise<never>((_resolve,fail)=>{reject=fail;});
+    window.studyRoomDesktop={startUpdate:vi.fn().mockReturnValue(pending)} as never;
+    const store=useUpdatesStore();store.synchronizeNoticeIdentity(true,'member-2:epoch-1');
+    const started=store.start();store.synchronizeNoticeIdentity(false);reject(new Error('late'));await started;
+    expect(store.failureNotice).toBeUndefined();expect(store.actionError).toBe('');
+  });
+
+  it('does not reopen a dismissed notice when the same operation promise rejects late', async () => {
+    let reject!: (reason?: unknown) => void;
+    const pending=new Promise<never>((_resolve,fail)=>{reject=fail;});
+    window.studyRoomDesktop={startUpdate:vi.fn().mockReturnValue(pending)} as never;
+    const store=useUpdatesStore();const started=store.start();store.acceptStatus(active);store.acceptStatus(diskFailure);
+    store.dismissFailureNotice();reject(new Error('late'));await started;
+    expect(store.failureNotice).toBeUndefined();expect(store.status.updateIntent).toBe(false);
+  });
 });
