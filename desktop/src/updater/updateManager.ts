@@ -628,6 +628,7 @@ export class UpdateManager {
     const code = safeUpdateErrorCode(error);
     const messages: Partial<Record<UpdateErrorCode, string>> = {
       UPDATE_RATE_LIMITED: '更新服务暂时限流，请稍后重试，不要连续点击。',
+      UPDATE_NETWORK_FAILED: '更新连接中断或响应未完整接收，已取消本次安装。请检查网络后重新检查更新，当前版本仍可继续使用。',
       UPDATE_CODE_SIGNATURE_INVALID: '安装包签名无效或发布者不匹配，已阻止安装。',
       UPDATE_ARTIFACT_HASH_FAILED: '更新文件与签名清单不一致，已阻止安装。',
       UPDATE_INSTALL_FAILED: '安装程序未能启动，当前版本仍可使用。请检查系统权限、防护软件及安装目录后重试。',
@@ -756,6 +757,10 @@ export function safeUpdateErrorCode(error: unknown): UpdateErrorCode {
   if (/HTTP_(?:ERROR_)?429|429 Too Many Requests/i.test(raw)) return 'UPDATE_RATE_LIMITED';
   if (/HTTP_401|TOKEN|EXPIRED/i.test(raw)) return "UPDATE_TOKEN_EXPIRED";
   if (/HTTP_(404|410)|WITHDRAWN/i.test(raw)) return "UPDATE_RELEASE_WITHDRAWN";
+  // Chromium uses MISMATCH for an incomplete HTTP body too. Match its exact
+  // transport codes before the fail-closed manifest/channel mismatch fallback.
+  const interruptedTransport = /\bERR_(?:CONTENT_LENGTH_MISMATCH|INCOMPLETE_CHUNKED_ENCODING|CONNECTION_RESET|CONNECTION_CLOSED|CONNECTION_ABORTED)\b/i;
+  if (interruptedTransport.test(code) || interruptedTransport.test(raw)) return 'UPDATE_NETWORK_FAILED';
   if (/MISMATCH|PATH_INVALID|FEED_URL_BLOCKED|CHANNEL/i.test(raw)) return "UPDATE_CHANNEL_MISMATCH";
   if (/SIGNATURE|KEY_(UNKNOWN|INVALID)/i.test(raw)) return "UPDATE_MANIFEST_SIGNATURE_INVALID";
   if (/MANIFEST|OFFER_INCOMPLETE|API_URL_BLOCKED/i.test(raw)) return "UPDATE_MANIFEST_INVALID";

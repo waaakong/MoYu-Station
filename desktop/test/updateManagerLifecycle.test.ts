@@ -291,6 +291,22 @@ it('prioritizes structured signature failure over hash names in certificate meta
   expect(safeUpdateErrorCode(error)).toBe('UPDATE_CODE_SIGNATURE_INVALID');
   expect(safeUpdateErrorCode(new Error('sha512 checksum mismatch'))).toBe('UPDATE_ARTIFACT_HASH_FAILED');
 });
+it.each(['net::ERR_CONTENT_LENGTH_MISMATCH','net::ERR_INCOMPLETE_CHUNKED_ENCODING','net::ERR_CONNECTION_RESET'])('keeps interrupted transport retryable instead of misclassifying it as a channel mismatch: %s',async raw=>{
+  expect(safeUpdateErrorCode(new Error(raw))).toBe('UPDATE_NETWORK_FAILED');
+  const {manager}=setup(true);await manager.setAuthState({authenticated:true});
+  const updater=doubles.updaters[0];updater.downloadUpdate.mockRejectedValueOnce(new Error(raw));
+  expect(await manager.download()).toMatchObject({state:'error',errorCode:'UPDATE_NETWORK_FAILED',canRetry:true,updateIntent:false});
+  expect(updater.quitAndInstall).not.toHaveBeenCalled();
+});
+it('keeps actual manifest/channel and artifact integrity mismatches blocked',()=>{
+  expect(safeUpdateErrorCode(new Error('UPDATE_MANIFEST_MISMATCH'))).toBe('UPDATE_CHANNEL_MISMATCH');
+  expect(safeUpdateErrorCode(new Error('sha512 checksum mismatch'))).toBe('UPDATE_ARTIFACT_HASH_FAILED');
+});
+it('recognizes structured interrupted transport codes without overriding signature verification',()=>{
+  expect(safeUpdateErrorCode(Object.assign(new Error('Download interrupted'),{code:'ERR_CONTENT_LENGTH_MISMATCH'}))).toBe('UPDATE_NETWORK_FAILED');
+  expect(safeUpdateErrorCode(Object.assign(new Error('net::ERR_CONTENT_LENGTH_MISMATCH'),{code:'ERR_UPDATER_INVALID_SIGNATURE'}))).toBe('UPDATE_CODE_SIGNATURE_INVALID');
+  expect(safeUpdateErrorCode(new Error('sha512 checksum mismatch; net::ERR_CONTENT_LENGTH_MISMATCH'))).toBe('UPDATE_ARTIFACT_HASH_FAILED');
+});
 it('forced checks preserve a user deferral and the already downloaded release',async()=>{
   const {manager}=setup(true);await manager.setAuthState({authenticated:true});await manager.download();
   const until=manager.defer().deferredUntil;await manager.check(true);
