@@ -629,6 +629,7 @@ export class UpdateManager {
     const messages: Partial<Record<UpdateErrorCode, string>> = {
       UPDATE_RATE_LIMITED: '更新服务暂时限流，请稍后重试，不要连续点击。',
       UPDATE_NETWORK_FAILED: '更新连接中断或响应未完整接收，已取消本次安装。请检查网络后重新检查更新，当前版本仍可继续使用。',
+      UPDATE_DISK_INSUFFICIENT: '磁盘空间不足，已阻止安装。请释放本机备份及更新文件所在磁盘的空间，再重新检查更新；当前版本仍可继续使用。',
       UPDATE_CODE_SIGNATURE_INVALID: '安装包签名无效或发布者不匹配，已阻止安装。',
       UPDATE_ARTIFACT_HASH_FAILED: '更新文件与签名清单不一致，已阻止安装。',
       UPDATE_INSTALL_FAILED: '安装程序未能启动，当前版本仍可使用。请检查系统权限、防护软件及安装目录后重试。',

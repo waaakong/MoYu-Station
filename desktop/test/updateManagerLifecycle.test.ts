@@ -448,7 +448,28 @@ it('one-click disk exhaustion cancels installation before any save or native lau
   updater.downloadUpdate.mockRejectedValueOnce(Object.assign(new Error('ENOSPC: no space left on device'),{code:'ENOSPC'}));
   await manager.start();
   expect(manager.snapshot()).toMatchObject({state:'error',errorCode:'UPDATE_DISK_INSUFFICIENT',canInstall:false,canRetry:true,updateIntent:false});
+  expect(manager.snapshot().message).toContain('磁盘空间不足');
   expect(prepare).not.toHaveBeenCalled();expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  manager.dispose(true);expect(updater.quitAndInstall).not.toHaveBeenCalled();
+});
+
+it('explains backup disk exhaustion without exposing the native error or allowing installation',async()=>{
+  const {manager}=setup(true,offer,{trustMode:'manifest-signed'});
+  const prepare=vi.fn(async()=>{throw new Error('UPDATE_DISK_INSUFFICIENT');});
+  manager.setInstallPreparation(prepare);
+  await manager.setAuthState({authenticated:true,accountSession:'backup-disk-fixture:epoch-1'});
+  const updater=doubles.updaters[0];
+  await manager.start();await vi.advanceTimersByTimeAsync(5000);
+  await vi.waitFor(()=>expect(manager.snapshot().state).toBe('error'));
+  expect(prepare).toHaveBeenCalledOnce();
+  expect(manager.snapshot()).toMatchObject({errorCode:'UPDATE_DISK_INSUFFICIENT',canInstall:false,canRetry:true,updateIntent:false});
+  expect(manager.snapshot().message).toContain('磁盘空间不足');
+  expect(manager.snapshot().message).toContain('备份');
+  expect(manager.snapshot().message).toContain('重新检查更新');
+  expect(manager.snapshot().message).not.toMatch(/ERR_SQLITE_ERROR|C:\\|UPDATE_DISK_INSUFFICIENT/);
+  expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(manager.snapshot().updateIntent).toBe(false);expect(updater.quitAndInstall).not.toHaveBeenCalled();
   manager.dispose(true);expect(updater.quitAndInstall).not.toHaveBeenCalled();
 });
 
