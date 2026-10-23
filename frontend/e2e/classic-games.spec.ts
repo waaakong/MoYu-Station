@@ -6,7 +6,15 @@ test('classic entry preserves legacy tools; puzzle and 2048 resume stored rounds
   await page.getByRole('button',{name:/风景拼图/}).click();const tiles=page.locator('.puzzle-grid button');await expect(tiles).toHaveCount(9);await tiles.nth(0).click();await tiles.nth(1).click();
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-entertainment-v1:puzzle')||'null')?.moves)).toBe(1);
   const saved=await page.evaluate(()=>localStorage.getItem('studyroom-entertainment-v1:puzzle'));await page.reload();await page.getByRole('button',{name:/风景拼图/}).click();await expect(tiles).toHaveCount(9);expect(await page.evaluate(()=>localStorage.getItem('studyroom-entertainment-v1:puzzle'))).toBe(saved);
-  await page.getByRole('button',{name:'返回',exact:true}).click();await page.getByRole('button',{name:/2048/}).click();const board=page.getByLabel('2048 棋盘');await board.focus();await page.keyboard.press('ArrowLeft');await page.getByRole('button',{name:'向下移动'}).click();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-entertainment-v1:game2048')||'null')?.revision||0)).toBeGreaterThan(0);
+  await page.getByRole('button',{name:'返回',exact:true}).click();
+  // Random initial boards can legitimately leave both left and down unchanged.
+  // Restore a known playable round; exercise real keyboard/button saves, not luck.
+  await page.evaluate(()=>localStorage.setItem('studyroom-entertainment-v1:game2048',JSON.stringify({version:1,generation:'00000000-0000-4000-8000-000000000048',revision:0,toolId:'game2048',board:[0,2,0,2,...Array(12).fill(0)],score:0,won:false})));
+  await page.getByRole('button',{name:/2048/}).click();const board=page.getByLabel('2048 棋盘');await board.focus();await page.keyboard.press('ArrowLeft');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-entertainment-v1:game2048')||'null')?.revision)).toBe(1);
+  await page.getByRole('button',{name:'向下移动'}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-entertainment-v1:game2048')||'null')?.revision)).toBe(2);
+  const saved2048=await page.evaluate(()=>localStorage.getItem('studyroom-entertainment-v1:game2048'));await page.reload();await page.getByRole('button',{name:/2048/}).click();await expect(board.locator('[data-value]')).toHaveCount(16);expect(await page.evaluate(()=>localStorage.getItem('studyroom-entertainment-v1:game2048'))).toBe(saved2048);
 });
 test('bad and future saves are preserved; a second tab cannot overwrite the owning game',async({page,context})=>{
   await local(page);const bad='{"version":999,"toolId":"spider"}';await page.evaluate(value=>localStorage.setItem('studyroom-entertainment-v1:spider',value),bad);await page.getByRole('button',{name:/蜘蛛纸牌/}).click();await expect(page.getByText(/原存档不可读取/)).toBeVisible();await page.getByRole('button',{name:/发一排牌/}).click();expect(await page.evaluate(()=>localStorage.getItem('studyroom-entertainment-v1:spider'))).toBe(bad);
