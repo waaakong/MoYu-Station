@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['0.2.0-trial.20261024.1', '0.2.0-trial.20261024.2']
+        version: ['0.2.0-trial.20261024.3', '0.2.0-trial.20261024.4']
     defaults:
       run:
         shell: pwsh

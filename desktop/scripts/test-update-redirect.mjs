@@ -1,0 +1,12 @@
+import {mkdtemp,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {spawn} from 'node:child_process';
+import {build} from 'esbuild';
+const workspace=resolve(import.meta.dirname,'../..'),root=await mkdtemp(join(tmpdir(),'moyu-native-redirect-'));
+await build({entryPoints:[join(workspace,'desktop/test-electron/updateRedirectHarness.ts')],outfile:join(root,'harness.cjs'),bundle:true,platform:'node',target:'node24',format:'cjs',external:['electron','node:*'],logLevel:'silent'});
+const env={...process.env,STUDYROOM_REDIRECT_TEST_ROOT:root};delete env.ELECTRON_RUN_AS_NODE;
+const child=spawn(join(workspace,'node_modules/electron/dist',process.platform==='win32'?'electron.exe':'electron'),[join(root,'harness.cjs')],{cwd:workspace,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+let output='',errors='';child.stdout.on('data',data=>{output+=data;});child.stderr.on('data',data=>{errors+=data;});
+const timeout=setTimeout(()=>child.kill(),45000);const code=await new Promise((resolve,reject)=>{child.once('exit',resolve);child.once('error',reject);});clearTimeout(timeout);
+await writeFile(join(root,'process.log'),output+'\n'+errors);console.log(output.trim());console.log(JSON.stringify({exitCode:code,evidence:root,loopbackOnly:true,noInstaller:true}));if(code!==0||!output.includes('STUDYROOM_NATIVE_REDIRECT_OK'))process.exitCode=1;

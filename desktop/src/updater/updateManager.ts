@@ -14,6 +14,7 @@ import { verifyFeedResponse, verifyUpdateInfo, verifyDownloadedInstaller } from 
 import { compareReleaseVersions, parsePublicDownloadRelease } from './manualVersionCheck';
 import { canFallbackToServer, fetchUpdateFeed, isGithubFeed } from './updateTransport';
 import { installUpdateNetworkGuard } from './updateNetworkGuard';
+import { fetchElectronUpdateFeedResponse } from './electronUpdateFeed';
 import { createHash } from 'node:crypto';
 import { UpdateIntent, type UpdateTarget, type UpdateIntentView } from './updateIntent';
 import { LaunchConfirmedNsisUpdater } from './launchConfirmedNsisUpdater';
@@ -329,7 +330,7 @@ export class UpdateManager {
       {
         let response: Response;
         try {
-          response = await fetchUpdateFeed((url, init) => net.fetch(url, init), offer.manifest, offer.feedUrl, offer.accessToken,
+          response = await fetchUpdateFeed((url, init) => fetchElectronUpdateFeedResponse(url, init, updater.netSession), offer.manifest, offer.feedUrl, offer.accessToken,
             AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]));
           if (!response.ok) throw new Error(`UPDATE_HTTP_${response.status}`);
         } catch (error) {
@@ -342,7 +343,7 @@ export class UpdateManager {
           this.configureUpdater(offer);
           updater = this.updater!;
           this.transition({ message: 'GitHub 暂时不可达，正在使用同版本的受保护服务器副本。' });
-          response = await fetchUpdateFeed((url, init) => net.fetch(url, init), offer.manifest, offer.feedUrl, offer.accessToken,
+          response = await fetchUpdateFeed((url, init) => fetchElectronUpdateFeedResponse(url, init, updater.netSession), offer.manifest, offer.feedUrl, offer.accessToken,
             AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]));
         }
         await verifyFeedResponse(response, offer.manifest, controller.signal);
