@@ -32,6 +32,12 @@ vi.mock('../src/updater/launchConfirmedNsisUpdater', async () => {
   return { LaunchConfirmedNsisUpdater: class extends NsisUpdater { readonly confirmedLaunchAdapter = true; } };
 });
 import { net } from 'electron';
+// These tests isolate lifecycle state. Real Electron redirect behavior is tested
+// by the transport harness, independently of this existing fetch double.
+vi.mock('../src/updater/electronUpdateFeed', async () => {
+  const { net } = await import('electron');
+  return { fetchElectronUpdateFeedResponse: (url: string, init: RequestInit) => net.fetch(url, init) };
+});
 
 const feedBytes=Buffer.from('fixture feed bytes'),installerBytes=Buffer.from('fixture installer bytes');
 const testDirectory=mkdtempSync(join(tmpdir(),'moyu-update-binding-'));

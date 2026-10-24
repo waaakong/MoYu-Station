@@ -43,6 +43,8 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: xvfb-run -a npm run smoke --workspace study-room-desktop
+      - name: Verify real Electron manual redirects and credential isolation
+        run: xvfb-run -a npm run test:update-redirect --workspace study-room-desktop
 
   visual:
     name: Windows visual baselines
