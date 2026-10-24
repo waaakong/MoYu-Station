@@ -140,4 +140,14 @@ defineExpose({ focusAppearance: () => (appearanceButton.value || accountButton.v
 .sr-reduced-motion .app-account,.sr-reduced-motion .app-account__chevron{transition:none}
 .sr-reduced-motion .app-account:active{transform:none}
 @media(max-width:600px){.app-account{gap:4px;padding-right:7px}.app-account__chevron{width:16px;height:16px}}
+/* Keep native controls and navigation in separate rows on a narrow work area.
+   Reuse the existing nodes so window commands and menu focus remain unchanged. */
+@media(max-width:800px){
+ .app-chrome--desktop .app-chrome__main{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand window" "navigation account";gap:4px 8px;padding:4px 12px}
+ .app-chrome--desktop .app-brand{grid-area:brand;justify-self:start}
+ .app-chrome--desktop .app-brand strong,.app-chrome--desktop .app-account__label{display:inline}
+ .app-chrome--desktop .app-nav--primary{grid-area:navigation;justify-self:start;margin-left:0}
+ .app-chrome--desktop .account-area{grid-area:account;justify-self:end}
+ .app-chrome--desktop :deep(.window-chrome){grid-area:window;justify-self:end}
+}
 </style>
