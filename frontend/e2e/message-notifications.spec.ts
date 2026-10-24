@@ -189,15 +189,26 @@ test('reconnected chat recovers unread once without replaying history as individ
 test('account generation change rejects an outstanding unread response and closes all old sockets', async ({ page }) => {
   await prepare(page);
   let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
-  let started = false;
-  await page.route('**/api/chat/private/unread', async route => { started = true; await held; await route.fulfill({ json: { success: true, data: [{ senderId: '3', unreadCount: 99, createdAt: 'old-session' }] } }); });
+  let started = false, newSessionReads = 0;
+  await page.route('**/api/chat/private/unread', async route => {
+    // Hold only the old request. A request created by the new identity must get
+    // its own empty baseline, not the old account's deliberately stale payload.
+    if (started) { newSessionReads++; await route.fulfill({json:{success:true,data:[]}}); return; }
+    started = true; await held;
+    await route.fulfill({ json: { success: true, data: [{ senderId: '3', unreadCount: 99, createdAt: 'old-session' }] } });
+  });
   try {
     await page.evaluate(() => window.dispatchEvent(new Event('online'))); await expect.poll(() => started).toBe(true);
     await page.evaluate(async () => {
+      // Vite's HMR transport is not owned by the account and must stay open.
+      (window as any).__oldNoticeSockets = (window as any).__noticeSockets.filter((s:any) => new URL(s.url,location.href).pathname.startsWith('/ws/'));
       const path = '/src/stores/auth.ts', auth = (await import(path)).useAuthStore(); auth.clearLocalSession();
       auth.user = { id: '4', username: 'second-fixture-only', userType: 'NORMAL' };
     });
+    await expect.poll(() => newSessionReads).toBeGreaterThan(0);
+    expect(await page.evaluate(() => (window as any).__oldNoticeSockets.length)).toBeGreaterThan(0);
     await page.unroute('**/api/chat/private/unread'); release();
+    await expect.poll(() => page.evaluate(() => (window as any).__oldNoticeSockets.filter((s:any) => s.readyState !== 3).map((s:any) => s.url))).toEqual([]);
     await expect(page.locator('.message-notice-open')).toHaveCount(0);
     await expect(page.locator('.message-notice-host')).not.toContainText('99');
   } finally { release(); }
