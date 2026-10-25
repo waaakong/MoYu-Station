@@ -110,7 +110,7 @@ studyroom:
     timeout-ms: 3000
     stale-after-ms: 300000
   activity:
-    # Requires explicit V16 migration in the controlled deployment workflow.
+    # Requires explicit V17 migration in the controlled deployment workflow.
     enabled: ${STUDYROOM_ACTIVITY_ENABLED:false}
   upload-quota:
     user-soft-limit: ${STUDYROOM_UPLOAD_USER_SOFT_LIMIT:268435456}
