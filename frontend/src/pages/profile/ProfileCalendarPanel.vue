@@ -11,7 +11,7 @@
           <span>{{ Number(day.date.slice(-2)) }}</span><small>{{ day.focusMinutes==null ? '—' : `${day.focusMinutes}m` }}</small>
         </button>
       </div>
-      <div v-if="selected" class="profile-note"><strong>{{ selected.date }} · Asia/Shanghai</strong><p>专注 {{ selected.focusMinutes ?? '暂无' }} 分钟 · 在线 {{ selected.onlineMinutes ?? '暂无' }} 分钟 · 摸鱼 {{ selected.fishMinutes ?? '暂无' }} 分钟</p><p>假努力指数：{{ selected.fakeEffortIndex == null ? '暂无' : Number(selected.fakeEffortIndex).toFixed(2) }}（专注 + 摸鱼 × 2）÷ 在线</p><small>{{ selected.coverage==='PARTIAL' ? '部分记录；无法计算完整指数。' : '趣味指标，不作为能力评价。' }}</small></div>
+      <div v-if="selected" class="profile-note"><strong>{{ selected.date }} · Asia/Shanghai</strong><p>专注 {{ selected.focusMinutes ?? '暂无' }} 分钟 · 在线 {{ selected.onlineMinutes ?? '暂无' }} 分钟 · 摸鱼 {{ selected.fishMinutes ?? '暂无' }} 分钟</p><p>{{ selected.fishTimingBasis==='RELAX_PAGE' ? '摸鱼：片刻放松页面累计，仅含新口径采集后记录。' : '历史旧口径：在线但未专注，不能还原片刻放松停留。' }}</p><p>假努力指数：{{ selected.fakeEffortIndex == null ? '暂无' : Number(selected.fakeEffortIndex).toFixed(2) }}（专注 + 摸鱼 × 2）÷ 在线</p><small>{{ selected.coverage==='PARTIAL' ? '部分记录；无法计算完整指数。' : '趣味指标，不作为能力评价。' }}</small></div>
     </template>
     <div v-else class="profile-state">本月还没有学习记录。</div>
   </section>

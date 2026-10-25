@@ -27,7 +27,8 @@ class MigrationPolicyTest {
             "db/media-migration/V13__client_release_policy_version.sql",
             "db/media-migration/V14__admin_record_versions.sql",
             "db/media-migration/V15__admin_access_versions.sql",
-            "db/media-migration/V16__activity_interval_ledger.sql"
+            "db/media-migration/V16__activity_interval_ledger.sql",
+            "db/media-migration/V17__relax_page_timing.sql"
     );
 
     @Test

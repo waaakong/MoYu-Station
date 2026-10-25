@@ -70,4 +70,37 @@ class ActivityLedgerMysqlIT {
       assertThat(entry.getValue().onlineMs()).isEqualTo(expected.onlineMs());assertThat(entry.getValue().focusMs()).isEqualTo(expected.focusMs());
     }
   }
+  @Test void modernRelaxationIsIncrementalIdempotentAndSurvivesFocusOverlaps(){
+    var online=batch(T,T+20000,"ONLINE");submit(1,online);
+    var relax=batch(T+5000,T+15000,"RELAX");submit(1,relax);submit(1,relax);
+    submit(1,batch(T+10000,T+20000,"FOCUS_V3"));
+    var day=ledger.days(1).get(LocalDate.of(2026,10,10));
+    assertThat(day.onlineMs()).isEqualTo(20000);assertThat(day.focusMs()).isEqualTo(10000);assertThat(day.relaxMs()).isEqualTo(5000L);
+    var live=tx.execute(s->ledger.live(1));assertThat(live).containsEntry("hasLegacy",false);
+    @SuppressWarnings("unchecked") var segments=(List<ActivityBatch.Segment>)live.get("segments");
+    assertThat(ActivityMath.union(segments,T,T+20000).fishMs()).isEqualTo(day.fishMs());
+    var other=tx.execute(s->ledger.live(2));assertThat(other).containsEntry("segments",List.of());
+  }
+  @Test void modernAndLegacyMixedDaysArePartialWithoutRewritingHistory(){
+    submit(1,batch(T-20000,T-10000,"IDLE"));
+    assertThat(ledger.days(1).get(LocalDate.of(2026,10,9)).relaxMs()).isNull();
+    submit(1,batch(T,T+5000,"ONLINE"));
+    submit(1,batch(T+5000,T+10000,"IDLE"));
+    var day=ledger.days(1).get(LocalDate.of(2026,10,10));
+    assertThat(day.relaxMs()).isZero();assertThat(day.partial()).isTrue();
+    assertThat(ledger.days(1).get(LocalDate.of(2026,10,9)).fishMs()).isEqualTo(10000);
+  }
+  @Test void modernUnionMatchesDailyAggregatesInRandomArrivalOrder(){
+    var random=new Random(67);var ranges=new ArrayList<ActivityBatch.Segment>();
+    for(int i=0;i<70;i++){
+      long start=T-15000+random.nextInt(20000),end=start+1+random.nextInt(9000);
+      String state=List.of("ONLINE","RELAX","FOCUS_V3","IDLE","FOCUS").get(random.nextInt(5));
+      var segment=new ActivityBatch.Segment(start,end,state);ranges.add(segment);submit(1,new ActivityBatch(id(),id(),1,List.of(segment),false));
+    }
+    for(var entry:ledger.days(1).entrySet()){
+      long start=entry.getKey().atStartOfDay(ActivityLedger.ZONE).toInstant().toEpochMilli();var expected=ActivityMath.union(ranges,start,start+86400000);
+      assertThat(entry.getValue().onlineMs()).isEqualTo(expected.onlineMs());assertThat(entry.getValue().focusMs()).isEqualTo(expected.focusMs());
+      assertThat(entry.getValue().relaxMs()).isEqualTo(expected.relaxMs());
+    }
+  }
 }

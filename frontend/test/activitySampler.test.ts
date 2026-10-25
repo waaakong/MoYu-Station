@@ -1,6 +1,13 @@
 import {describe,it,expect} from 'vitest';
 import {ActivitySampler} from '../src/activity/sampler';
 describe('activity evidence sampler',()=>{
+  it('closes relaxation immediately on leaving the page and counts no sleep gap',()=>{
+    const s=new ActivitySampler();s.sample(10000,0,'ONLINE');
+    expect(s.sample(11000,1000,'RELAX')?.state).toBe('ONLINE');
+    expect(s.sample(12000,2000,'ONLINE')?.state).toBe('RELAX');
+    expect(s.sample(13000,3000,'ONLINE')?.state).toBe('ONLINE');
+    expect(s.sample(30000,20000,'RELAX')).toBeUndefined();
+  });
   it('same-millisecond timer and focus events do not mark a complete day partial',()=>{
     const s=new ActivitySampler();s.sample(10000,0,false);
     expect(s.sample(10000,.3,true)).toBeUndefined();expect(s.partial).toBe(false);

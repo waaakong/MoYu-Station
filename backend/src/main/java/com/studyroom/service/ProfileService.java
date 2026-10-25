@@ -179,6 +179,7 @@ public class ProfileService {
     response.setFishMinutes(metrics.fishMinutes());
     response.setOnlineMinutes(metrics.onlineMinutes());
     response.setCoverage(metrics.coverage());
+    response.setFishTimingBasis(metrics.fishTimingBasis());
     int streak=0;
     for(LocalDate day=today;dates.contains(day);day=day.minusDays(1)){
       var record=legacy.get(day);
@@ -216,6 +217,7 @@ public class ProfileService {
       if(date.isAfter(LocalDate.now(STAT_ZONE)))metrics=com.studyroom.activity.ActivityView.of(null,0,null);
       response.setFocusMinutes(metrics.focusMinutes());response.setOnlineMinutes(metrics.onlineMinutes());response.setFishMinutes(metrics.fishMinutes());
       response.setFakeEffortIndex(metrics.index());response.setCoverage(metrics.coverage());
+      response.setFishTimingBasis(metrics.fishTimingBasis());
       response.setStatus(zero(metrics.focusMinutes())>0?"FOCUS":zero(metrics.fishMinutes())>0?"FISH":"EMPTY");
       days.add(response);
     }
@@ -265,6 +267,7 @@ public class ProfileService {
     response.setFocusMinutes(stats.getTodayFocusMinutes());
     response.setFishMinutes(stats.getFishMinutes());
     response.setFakeEffortIndex(stats.getFakeEffortIndex());
+    response.setFishTimingBasis(stats.getFishTimingBasis());
     response.setFavoriteScene(stats.getFavoriteScene());
     response.setQuote("把时间调成适合自己的样子。");
     return response;

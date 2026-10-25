@@ -3,6 +3,9 @@ package com.studyroom.dto;
 import java.math.BigDecimal;
 
 public class ProfileStatsResponse {
+  private String fishTimingBasis;
+  public String getFishTimingBasis(){return fishTimingBasis;}
+  public void setFishTimingBasis(String value){fishTimingBasis=value;}
   private String coverage;
   public String getCoverage(){return coverage;}
   public void setCoverage(String value){coverage=value;}

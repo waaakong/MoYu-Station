@@ -1,5 +1,5 @@
 import {watch} from 'vue';
-import type {ActivityBatch,ActivityReceipt} from '@studyroom/contracts';
+import type {ActivityBatch,ActivityReceipt,ActivitySegment} from '@studyroom/contracts';
 import {useAuthStore} from '../stores/auth';
 import {useFocusStore} from '../stores/focus';
 import {http} from '../services/http';
@@ -10,13 +10,20 @@ import {activityState} from './state';
 
 let flushRuntime:()=>Promise<void>=async()=>{};
 export const flushActivity=()=>flushRuntime();
-export function startActivityRuntime(){
+export function startActivityRuntime(routeName:()=>unknown=()=>undefined){
   const auth=useAuthStore(),focus=useFocusStore();
   let epoch=0,owner='',session='',sequence=0,sampler=new ActivitySampler(),batch:ActivityBatch|undefined;
   let saving=Promise.resolve(),uploading=false,stopped=false,suspended=false,enabled=false,backlogPaused=false;
   // Cloud capability/sync failures do not imply unsaved local data. Keep a local
   // persistence fault separately, including across account/UI error transitions.
   let localSaveError='';
+  function observe(segment:ActivitySegment){
+    const cutoff=Date.now()-86400000;
+    activityState.observed=activityState.observed.filter(s=>s.endMs>cutoff);
+    const last=activityState.observed.at(-1);
+    if(last?.state===segment.state&&last.endMs===segment.startMs)last.endMs=segment.endMs;
+    else activityState.observed.push({...segment});
+  }
   let releaseStream:(()=>void)|undefined;
   const identity=()=>!auth.authTransition&&!auth.isBanned&&auth.user?String(auth.user.id):'';
   const valid=(ticket:number,scope:string)=>!stopped&&ticket===epoch&&identity()===scope;
@@ -29,8 +36,11 @@ export function startActivityRuntime(){
   }
   function tick(){
     if(!enabled||backlogPaused||suspended||identity()!==owner)return;
-    const segment=sampler.sample(Date.now(),performance.now(),focus.timerState==='running'&&focus.session?.accountScope===owner);
+    const focusing=focus.timerState==='running'&&focus.session?.accountScope===owner;
+    const state=activityState.relaxTiming?(routeName()==='entertainment'?'RELAX':focusing?'FOCUS_V3':'ONLINE'):focusing?'FOCUS':'IDLE';
+    const segment=sampler.sample(Date.now(),performance.now(),state);
     if(!segment)return;
+    observe(segment);
     // A resumed tab must not stretch a small checkpoint across a long sleep/freeze.
     if(batch?.segments.length && segment.startMs!==batch.segments.at(-1)!.endMs){batch.partial=true;persist(true);}
     batch??={requestId:crypto.randomUUID(),sessionId:session,sequence:++sequence,segments:[],partial:false};
@@ -78,11 +88,14 @@ export function startActivityRuntime(){
   flushRuntime=flush;
   const stopIdentity=watch(()=>[identity(),auth.sessionGeneration],async()=>{
     persist(true);const previousRelease=releaseStream;releaseStream=undefined;void saving.then(()=>previousRelease?.());enabled=false;backlogPaused=false;epoch++;const ticket=epoch;owner=identity();session=crypto.randomUUID();sequence=0;batch=undefined;sampler=new ActivitySampler();
-    Object.assign(activityState,{owner,sessionId:'',enabled:false,pending:0,error:''});if(!owner)return;
+    Object.assign(activityState,{owner,sessionId:'',enabled:false,pending:0,error:'',relaxTiming:false,observed:[]});if(!owner)return;
     const scope=owner;
     try{const response=await http.get('/activity/capabilities',{mediaGuard:()=>{if(!valid(ticket,scope))throw new DOMException('账号已变更','AbortError');}});
       if(!valid(ticket,scope)||response.data.data?.version!==2)return;
+      activityState.relaxTiming=response.data.data?.relaxTimingVersion===1;
       await saving;if(!valid(ticket,scope))return;
+      const stored=await readActivity(scope);if(!valid(ticket,scope))return;
+      for(const record of stored)for(const segment of record.batch.segments)observe(segment);
       if(!navigator.locks)throw new Error('当前浏览器无法安全协调活动账本。');
       const stream=session;
       await new Promise<void>(resolve=>{void navigator.locks.request(`moyu-activity:${stream}`,async()=>{if(!valid(ticket,scope)){resolve();return;}await new Promise<void>(release=>{releaseStream=release;resolve();});});});
@@ -90,11 +103,12 @@ export function startActivityRuntime(){
     }catch{if(valid(ticket,scope))activityState.error='在线账本暂不可用，原专注记录仍正常保存。';}
   },{immediate:true,flush:'sync'});
   const stopFocus=watch(()=>focus.timerState,tick,{flush:'sync'});
+  const stopRoute=watch(routeName,tick,{flush:'sync'});
   const timer=setInterval(tick,1000),syncTimer=setInterval(()=>{void upload();},15000);
   function suspend(){tick();persist(true);sampler.suspend();suspended=true;}
   function resume(){suspended=false;sampler.suspend();tick();void upload();}
   const stopLifecycle=window.studyRoomDesktop?.onDesktopLifecycle(event=>{if(event.type==='suspend')suspend();else resume();});
   window.addEventListener('pagehide',suspend);window.addEventListener('pageshow',resume);
   const stopQuit=registerQuitSaver(async()=>{suspend();await saving;if(localSaveError)throw new Error(localSaveError);},resume);
-  return ()=>{suspend();stopped=true;epoch++;void saving.then(()=>releaseStream?.());stopIdentity();stopFocus();stopLifecycle?.();stopQuit();clearInterval(timer);clearInterval(syncTimer);window.removeEventListener('pagehide',suspend);window.removeEventListener('pageshow',resume);flushRuntime=async()=>{};};
+  return ()=>{suspend();stopped=true;epoch++;void saving.then(()=>releaseStream?.());stopIdentity();stopFocus();stopRoute();stopLifecycle?.();stopQuit();clearInterval(timer);clearInterval(syncTimer);window.removeEventListener('pagehide',suspend);window.removeEventListener('pageshow',resume);flushRuntime=async()=>{};};
 }

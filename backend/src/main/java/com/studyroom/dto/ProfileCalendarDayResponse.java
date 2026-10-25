@@ -3,6 +3,9 @@ package com.studyroom.dto;
 import java.math.BigDecimal;
 
 public class ProfileCalendarDayResponse {
+  private String fishTimingBasis;
+  public String getFishTimingBasis(){return fishTimingBasis;}
+  public void setFishTimingBasis(String value){fishTimingBasis=value;}
   private String coverage;
   private Integer onlineMinutes,fishMinutes;
   public String getCoverage(){return coverage;}

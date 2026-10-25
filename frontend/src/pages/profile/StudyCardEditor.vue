@@ -1,7 +1,7 @@
 <template>
   <dialog ref="dialog" class="study-card-editor sr-glass sr-glass--floating" aria-labelledby="study-card-title" @close="!dialog?.open && release()" @cancel.prevent="close">
     <header><h2 id="study-card-title">学习卡片</h2><button autofocus type="button" @click="close">关闭</button></header>
-    <label class="card-date">报告日期（北京时间）<input v-model="selectedDate" type="date" min="2000-01-01" :max="today" @change="loadDate" /></label>
+    <div class="card-date"><span>报告日期（北京时间）</span><StudyDatePicker v-model="selectedDate" min="2000-01-01" :max="today" @change="loadDate" /></div>
     <div class="study-card-body" :aria-busy="busy">
       <section aria-label="学习卡片预览"><canvas ref="canvas" role="img" aria-label="学习卡片图片预览" aria-describedby="study-card-transcript" width="1200" height="675" /><p>1200 × 675 · PNG · Asia/Shanghai · 背景：{{ backgroundName }}</p><p id="study-card-transcript">{{ transcript }}</p></section>
       <section aria-label="导出内容设置"><fieldset :disabled="busy || !ready"><legend>卡片展示内容</legend><label><input v-model="options.focus" type="checkbox" />专注分钟</label><label><input v-model="options.fish" type="checkbox" />摸鱼分钟</label><label><input v-model="options.effort" type="checkbox" />假努力指数</label><small>可全部取消，仅影响本张卡片。</small></fieldset><p class="study-card-quote">{{ studyQuotes[quote] }}</p><button type="button" :disabled="busy || !ready" @click="quote=nextQuote(quote)">随机一句</button><p>未采集的指标显示“暂无”，不作为能力评价。</p></section>
@@ -13,6 +13,7 @@
 import { openMotionDialog, closeMotionDialog } from '../../motion/runtime';
 import {computed,nextTick,onBeforeUnmount,reactive,ref,watch} from 'vue';
 import {useAuthStore} from '../../stores/auth';
+import StudyDatePicker from './StudyDatePicker.vue';
 import {scenes} from '../../data/scenes';
 import {fetchShareCard,type ShareCard} from '../../services/profile';
 import {studyQuotes,nextQuote,studyCardSnapshot,cardTranscript,paintStudyCard,type StudyCard} from '../../profile/studyCard';
@@ -82,7 +83,7 @@ header,footer{display:flex;align-items:center;justify-content:space-between;gap:
 .study-card-body{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:24px;padding:0 24px 20px;overflow:auto;min-height:0}.study-card-body section{min-width:0}
 canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:12px;background:#192321}p,small{font-size:12px;line-height:1.7;overflow-wrap:anywhere}fieldset{border:0;padding:0;margin:0}label{display:flex;align-items:center;gap:10px;min-height:44px}input{width:18px;height:18px}.study-card-quote{font-size:17px}
 button{min-height:44px;padding:8px 16px;border-radius:14px;border:1px solid var(--sr-color-line-strong);background:var(--sr-color-surface-raised);color:inherit}button:focus-visible{outline:2px solid var(--sr-color-focus);outline-offset:2px}button:disabled{opacity:.5}
-.card-date{padding:0 24px 16px;flex-wrap:wrap}.card-date input{width:auto;height:40px;color:inherit;background:var(--sr-color-surface-raised);border:1px solid var(--sr-color-line-strong);border-radius:10px;padding:0 10px;color-scheme:dark}
+.card-date{display:flex;align-items:center;gap:12px;padding:0 24px 16px;flex-wrap:wrap}
 @media(max-width:800px){.study-card-body{grid-template-columns:1fr}header,footer{padding:16px}footer{flex-direction:column;align-items:stretch;gap:8px}footer p{margin:0}.study-card-body{padding:0 16px 16px}footer>div{justify-content:flex-end}}
 @media(prefers-reduced-motion:no-preference){.study-card-editor[open]{animation:study-card-in 160ms ease-out}.sr-reduced-motion .study-card-editor[open]{animation:none}}
 @keyframes study-card-in{from{transform:translateY(6px)}to{transform:translateY(0)}}

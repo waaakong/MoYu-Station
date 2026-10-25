@@ -20,6 +20,7 @@ export interface ProfileDetails extends UserProfile {
 }
 
 export interface ProfileStats {
+  fishTimingBasis?:'LEGACY_IDLE'|'RELAX_PAGE';
   fakeEffortIndex?:number|null;
   coverage?:'CONFIRMED'|'PARTIAL'|'UNAVAILABLE';
   todayFocusMinutes?: number | null;
@@ -31,6 +32,7 @@ export interface ProfileStats {
 }
 
 export interface ProfileCalendarDay {
+  fishTimingBasis?:'LEGACY_IDLE'|'RELAX_PAGE';
   onlineMinutes?:number|null;
   fishMinutes?:number|null;
   fakeEffortIndex?:number|null;
@@ -50,6 +52,7 @@ export interface ProfilePost {
 }
 
 export interface ShareCard {
+  fishTimingBasis?:'LEGACY_IDLE'|'RELAX_PAGE';
   coverage?:string;
   statDate?: string;
   timeZone?: string;

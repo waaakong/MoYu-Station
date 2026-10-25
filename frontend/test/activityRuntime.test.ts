@@ -21,6 +21,20 @@ beforeEach(async()=>{
 });
 afterEach(async()=>{stop();await settle();vi.useRealTimers();vi.unstubAllGlobals();});
 describe('persistent activity runtime',()=>{
+  it('uses page classification only after capability negotiation and closes route transitions',async()=>{
+    stop();await settle();fixture.records.clear();
+    fixture.get.mockImplementation(async url=>{if(url.endsWith('capabilities'))return {data:{data:{version:2,relaxTimingVersion:1}}};throw new Error('fixture offline');});
+    const route=reactive({name:'scene'});stop=startActivityRuntime(()=>route.name);await settle();
+    await vi.advanceTimersByTimeAsync(2000);route.name='entertainment';
+    await vi.advanceTimersByTimeAsync(3000);route.name='profile';
+    await vi.advanceTimersByTimeAsync(1000);await flushActivity();
+    const ranges=[...fixture.records.values()].flatMap(r=>r.batch.segments);
+    expect(ranges.filter(s=>s.state==='RELAX').reduce((n,s)=>n+s.endMs-s.startMs,0)).toBe(3000);
+    expect(ranges.filter(s=>s.state==='ONLINE').reduce((n,s)=>n+s.endMs-s.startMs,0)).toBe(3000);
+    expect(activityState.observed.some(s=>s.state==='RELAX')).toBe(true);
+    fixture.auth.user={id:'2'};fixture.auth.sessionGeneration++;await settle();
+    expect(activityState.observed).toEqual([]);
+  });
   it('seals before a long wall gap without extrapolating or oversizing a batch',async()=>{
     await vi.advanceTimersByTimeAsync(2000);vi.setSystemTime(Date.now()+120000);await vi.advanceTimersByTimeAsync(2000);await flushActivity();
     const records=[...fixture.records.values()].sort((a,b)=>a.batch.sequence-b.batch.sequence);

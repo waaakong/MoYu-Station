@@ -152,7 +152,7 @@ onMounted(async () => {
     { label: '正在恢复本地空间', run: () => {
       sceneStore.startClock();
       stopFocusRuntime=startFocusRuntime();
-      stopActivityRuntime=startActivityRuntime();
+      stopActivityRuntime=startActivityRuntime(()=>route.name);
       stopPrivateSceneRuntime=startPrivateSceneRuntime();
     } },
     { label: '正在连接本机功能', run: () => capabilitiesStore.load() },
