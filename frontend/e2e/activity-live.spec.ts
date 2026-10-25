@@ -19,26 +19,29 @@ async function setup(page:Page){
     await route.fulfill({json:{success:true,data}});
   });
   await page.goto('/profile?module=stats');await expect(page.getByRole('heading',{name:'学习统计'})).toBeVisible();
+  return receipts;
 }
 test('profile uses second-level live intervals, counts only relaxation and deduplicates uploaded copies',async({page},info)=>{
-  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);
+  test.setTimeout(45000);
+  const errors:string[]=[],consoleErrors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});const receipts=await setup(page);
   const fish=page.locator('.profile-stat-grid article').filter({has:page.getByText('今日摸鱼',{exact:true})});
   const online=page.locator('.profile-stat-grid article').filter({has:page.getByText('今日在线',{exact:true})});
   const effort=page.locator('.profile-stat-grid article').filter({has:page.getByText('假努力指数',{exact:true})});
   await expect(fish.locator('strong')).toHaveText('0 分 30 秒');await expect(effort.locator('strong')).not.toHaveText('99.00');
   const seconds=async()=>{const text=await online.locator('strong').innerText();const match=text.match(/(\d+) 分 (\d+) 秒/);return match?Number(match[1])*60+Number(match[2]):-1;};
   const before=await seconds();await expect.poll(seconds).toBeGreaterThan(before);await expect(fish.locator('strong')).toHaveText('0 分 30 秒');
-  await page.getByRole('link',{name:'片刻放松',exact:true}).click();await expect(page.getByRole('heading',{name:'休息一下',exact:true})).toBeVisible();
+  const entered=Date.now();await page.getByRole('link',{name:'片刻放松',exact:true}).click();await expect(page.getByRole('heading',{name:'休息一下',exact:true})).toBeVisible();
   await expect.poll(async()=>page.evaluate(async()=>{
     return new Promise<number>((resolve,reject)=>{const req=indexedDB.open('moyu-activity-v2',1);req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,q=db.transaction('outbox').objectStore('outbox').getAll();q.onsuccess=()=>{resolve(q.result.flatMap(r=>r.batch.segments).filter(s=>s.state==='RELAX').reduce((n,s)=>n+s.endMs-s.startMs,0));db.close();};};});
   })).toBeGreaterThan(1000);
   await page.getByRole('button',{name:'账号菜单'}).click();await page.getByRole('link',{name:'个人空间',exact:true}).click();await page.getByRole('button',{name:/学习统计/}).click();
   const fishSeconds=async()=>{const text=await fish.locator('strong').innerText(),m=text.match(/(\d+) 分 (\d+) 秒/);return m?Number(m[1])*60+Number(m[2]):-1;};
-  await expect.poll(fishSeconds).toBeGreaterThan(30);expect(await fishSeconds()).toBeLessThan(50);
+  await expect.poll(fishSeconds).toBeGreaterThan(30);expect(await fishSeconds()).toBeLessThanOrEqual(30+Math.ceil((Date.now()-entered)/1000)+1);
   const after=await fishSeconds(),onlineBefore=await seconds();await expect.poll(seconds).toBeGreaterThan(onlineBefore+1);expect(await fishSeconds()).toBe(after);
+  await expect.poll(()=>receipts.size,{timeout:20000}).toBeGreaterThan(0);expect(await fishSeconds()).toBe(after);
   for(const [width,height] of [[1440,900],[1280,720],[1080,640],[390,844]]){
     await page.setViewportSize({width,height});await expect(fish).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:info.outputPath(`live-${width}.png`),animations:'disabled'});
   }
-  expect(errors).toEqual([]);
+  expect(errors).toEqual([]);expect(consoleErrors).toEqual([]);
 });
