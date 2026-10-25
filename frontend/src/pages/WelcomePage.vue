@@ -9,7 +9,7 @@
       </div>
       <div class="top-actions">
         <RouterLink v-if="!isDesktop" class="login-button sr-glass-control download-link" to="/download">下载客户端</RouterLink>
-        <button class="login-button sr-glass-control" type="button" @click="enterLoginPage">登录</button>
+        <button class="login-button sr-glass-control account-entry" type="button" :disabled="sessionRestoring" :aria-busy="sessionRestoring" @click="enterAccountPage">{{ accountLabel }}</button>
       </div>
     </header>
 
@@ -33,15 +33,24 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useShellStore } from '../stores/shell';
+import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
 const shell = useShellStore();
+const auth = useAuthStore();
 const isDesktop = Boolean(window.studyRoomDesktop);
 const isLeaving = ref(false);
 const navigationError = ref('');
+const retryingSession = ref(false);
+const sessionRestoring = computed(() => !auth.loaded || retryingSession.value);
+const accountLabel = computed(() => {
+  if (sessionRestoring.value) return '正在确认账号…';
+  if (auth.isLoggedIn) return `我的空间 · ${auth.user.nickname || auth.user.username}`;
+  return auth.sessionCheckError ? '重试确认账号' : '登录';
+});
 let alive = true;
 
 async function navigateAfterCurtain(route) {
@@ -60,8 +69,16 @@ function enterScenePage(event) {
   navigateAfterCurtain({ name: "scene" });
 }
 
-function enterLoginPage(event) {
-  navigateAfterCurtain({ name: "login", query: { redirect: "scene" } });
+async function enterAccountPage() {
+  if (sessionRestoring.value) return;
+  if (auth.isLoggedIn) return navigateAfterCurtain({ name: 'profile' });
+  if (auth.sessionCheckError) {
+    retryingSession.value = true;
+    try { await auth.loadCurrentUser(); }
+    finally { retryingSession.value = false; }
+    return;
+  }
+  return navigateAfterCurtain({ name: "login", query: { redirect: "scene" } });
 }
 
 function handleKeydown(event) {
@@ -220,6 +237,9 @@ onBeforeUnmount(() => {
 .login-button:active {
   transform: scale(.94);
 }
+
+.account-entry { max-width: min(48vw, 360px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-entry:disabled { cursor: wait; opacity: .72; }
 
 .hero {
   position: relative;
