@@ -8,6 +8,7 @@ async function setup(page:Page){
   await page.route('**/api/**',async route=>{
     const path=new URL(route.request().url()).pathname;let data:unknown=[];
     if(path==='/api/auth/me'||path==='/api/profile/me')data={id:'2',username:'fixture',nickname:'测试用户',userType:'NORMAL'};
+    else if(path==='/api/auth/csrf')data={token:'fixture-csrf-token'};
     else if(path==='/api/activity/capabilities')data={version:2,relaxTimingVersion:1};
     else if(path==='/api/activity/live')data={date,timeZone:'Asia/Shanghai',segments:intervals,partial:false,hasLegacy:false};
     else if(path==='/api/activity/intervals'){

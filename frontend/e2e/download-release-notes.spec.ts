@@ -12,7 +12,8 @@ for(const width of [1440,390])test(`download release notes and login boundary ${
  await expect(page.getByRole('heading',{name:'更新日志',exact:true})).toBeVisible();
  await expect(page.locator('#release-notes')).toContainText('当前下载版本');
  await expect(page.locator('.release-entry').first()).toContainText(releaseNotes[0]!.title);
- await expect(page.locator('.release-entry').first()).toContainText('自动下载安装');
+ await expect(page.locator('.release-entry').first()).toContainText(releaseNotes[0]!.changes[0]!);
+ await expect(page.locator('.release-entry').first()).toContainText(releaseNotes[0]!.limitations);
  await page.locator('.release-entry details summary').first().click();
  await expect(page.locator('.release-entry').nth(1)).toContainText(releaseNotes[1]!.changes[0]!);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
