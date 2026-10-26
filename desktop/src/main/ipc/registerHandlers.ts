@@ -478,11 +478,18 @@ export function registerIpcHandlers(dependencies: RegisterHandlerDependencies): 
     const request = providerPlaybackRequestSchema.parse(input);
     const queuedTrack = database.readQueue().find(item => item.track.id === request.trackId)?.track;
     const source = await providers.resolveKnownPlayback(request, queuedTrack);
-    const mediaToken = providerMedia.issue({
-      kind: "provider", ownerId: source.providerId, trackId: source.trackId,
-      playbackSessionId: request.playbackSessionId, accountScope: source.accountScope ?? "local", url: source.url,
-      expiresAt: source.expiresAt, allowedHosts: source.allowedHosts, requestHeaders: source.requestHeaders
+    const scopedSource = (value:typeof source) => ({
+      kind: "provider" as const, ownerId: value.providerId, trackId: value.trackId,
+      playbackSessionId: request.playbackSessionId, accountScope: value.accountScope ?? "local", url: value.url,
+      expiresAt: value.expiresAt, allowedHosts: value.allowedHosts, requestHeaders: value.requestHeaders
     });
+    const mediaToken = providerMedia.issue(scopedSource(source),source.providerId==='kugou'?async signal=>{
+      signal.throwIfAborted();
+      const currentTrack=database.readQueue().find(item=>item.track.id===request.trackId)?.track;
+      const fresh=await providers.resolveKnownPlayback(request,currentTrack??queuedTrack);
+      signal.throwIfAborted();
+      return scopedSource(fresh);
+    }:undefined);
     if (request.fallbackReason && request.fromProviderId && request.fromProviderId !== source.providerId) {
       window.webContents.send(IPC_CHANNELS.sourceSwitch, {
         change: {

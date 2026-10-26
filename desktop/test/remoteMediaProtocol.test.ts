@@ -18,6 +18,7 @@ describe("short-lived remote media sessions", () => {
     const pending=createRemoteMediaResponse(new Request(`studyroom-media://provider/${token}`),registry,async(_url,init)=>{
       signal=init!.signal!;return new Promise(resolve=>{finish=resolve;});
     });
+    await Promise.resolve(); // Await the asynchronous session resolution, not a timer.
     registry.invalidateOwner("netease");expect(signal.aborted).toBe(true);
     finish(new Response("audio",{headers:{"content-type":"audio/mpeg"}}));
     expect((await pending).status).toBe(404);expect(registry.resolve("provider",token)).toBeUndefined();

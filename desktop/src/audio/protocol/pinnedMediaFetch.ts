@@ -21,7 +21,7 @@ export const pinnedMediaFetch: typeof fetch = async (input,init) => {
       // No redirect handling: an upstream redirect is a failure, never a new destination.
       if(![200,206].includes(response.statusCode??0)){response.destroy();reject(new Error("MEDIA_STATUS_REJECTED"));return;}
       const responseHeaders=new Headers();
-      for(const name of ["content-type","content-length","content-range","accept-ranges"]){
+      for(const name of ["content-type","content-length","content-range","accept-ranges","etag"]){
         const value=response.headers[name];if(typeof value==="string")responseHeaders.set(name,value);
       }
       resolve(new Response(Readable.toWeb(response) as ReadableStream<Uint8Array>,{status:response.statusCode,headers:responseHeaders}));
