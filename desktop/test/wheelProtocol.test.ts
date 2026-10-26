@@ -2,6 +2,8 @@ import {describe,it,expect} from 'vitest';
 import {wheelSettingsSchema,DEFAULT_WHEEL,nativeArguments,parseWheelMessage,wheelSlot} from '../src/main/music/wheelProtocol';
 describe('finite global wheel protocol',()=>{
   it('only permits fixed modifiers and known finite commands',()=>{
+    expect(DEFAULT_WHEEL.accelerator).toBe('Control+Alt');
+    expect(nativeArguments('Control+Alt',false)).toEqual(['0','3','0']);
     expect(nativeArguments('Control+Alt+Space',false)).toEqual(['32','3','0']);
     expect(nativeArguments('Control+Alt+Shift+F12',true)).toEqual(['123','7','1']);
     for(const accelerator of ['Alt','Space','Control+Alt+;calc.exe','Control+Alt+F13'])expect(()=>nativeArguments(accelerator,false)).toThrow();

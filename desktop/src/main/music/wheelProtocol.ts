@@ -1,9 +1,10 @@
 import {z} from 'zod';
 import {DESKTOP_WHEEL_COMMANDS} from '@studyroom/contracts';
-export const wheelSettingsSchema=z.object({enabled:z.boolean(),accelerator:z.string().regex(/^Control\+Alt\+(Shift\+)?(Space|[A-Z0-9]|F([1-9]|1[0-2]))$/),slots:z.array(z.enum(DESKTOP_WHEEL_COMMANDS)).length(8).refine(v=>new Set(v).size===8),allowFullscreen:z.boolean()}).strict();
-export const DEFAULT_WHEEL={enabled:true,accelerator:'Control+Alt+Space',slots:[...DESKTOP_WHEEL_COMMANDS],allowFullscreen:false};
+export const wheelSettingsSchema=z.object({enabled:z.boolean(),accelerator:z.string().regex(/^Control\+Alt(?:\+(Shift\+)?(Space|[A-Z0-9]|F([1-9]|1[0-2])))?$/),slots:z.array(z.enum(DESKTOP_WHEEL_COMMANDS)).length(8).refine(v=>new Set(v).size===8),allowFullscreen:z.boolean()}).strict();
+export const DEFAULT_WHEEL={enabled:true,accelerator:'Control+Alt',slots:[...DESKTOP_WHEEL_COMMANDS],allowFullscreen:false};
 export function nativeArguments(accelerator:string,allowFullscreen:boolean){
   const value=wheelSettingsSchema.shape.accelerator.parse(accelerator),parts=value.split('+'),key=parts[parts.length-1]!;
+  if(value==='Control+Alt')return['0','3',allowFullscreen?'1':'0'];
   const vk=key==='Space'?32:key.startsWith('F')&&key.length>1?111+Number(key.slice(1)):key.charCodeAt(0);
   return[String(vk),value.includes('Shift+')?'7':'3',allowFullscreen?'1':'0'];
 }

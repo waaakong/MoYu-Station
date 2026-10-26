@@ -21,6 +21,16 @@ static bool fullscreen(){
   RECT r{};MONITORINFO mi{sizeof(mi)};if(!GetWindowRect(w,&r)||!GetMonitorInfoW(MonitorFromWindow(w,MONITOR_DEFAULTTONEAREST),&mi))return true;
   return r.left==mi.rcMonitor.left&&r.top==mi.rcMonitor.top&&r.right==mi.rcMonitor.right&&r.bottom==mi.rcMonitor.bottom;
 }
+static bool control(UINT key){return key==VK_CONTROL||key==VK_LCONTROL||key==VK_RCONTROL;}
+static bool alt(UINT key){return key==VK_MENU||key==VK_LMENU||key==VK_RMENU;}
+static bool shift(UINT key){return key==VK_SHIFT||key==VK_LSHIFT||key==VK_RSHIFT;}
+static bool permitted(){return GetTickCount64()-heartbeat.load()<2500&&(allowFullscreen||!fullscreen());}
+static void begin(){held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");}
+static void finish(){
+  if(!active)return;
+  if(GetForegroundWindow()!=foreground||!permitted())cancel();
+  else{active=false;emit("RELEASE");}
+}
 static LRESULT CALLBACK keyboard(int code,WPARAM msg,LPARAM data){
   if(code<0)return CallNextHookEx(keyboardHook,code,msg,data);
   const auto* e=reinterpret_cast<KBDLLHOOKSTRUCT*>(data);
@@ -28,14 +38,28 @@ static LRESULT CALLBACK keyboard(int code,WPARAM msg,LPARAM data){
   const bool press=msg==WM_KEYDOWN||msg==WM_SYSKEYDOWN,release=msg==WM_KEYUP||msg==WM_SYSKEYUP;
   if(blockEscape&&e->vkCode==VK_ESCAPE){if(release)blockEscape=false;return 1;}
   if(active&&press&&e->vkCode==VK_ESCAPE){blockEscape=true;cancel();return 1;}
+  if(trigger==0){
+    // Low-level hooks run before Windows updates async key state. Include this
+    // event explicitly so either Ctrl/Alt press order opens on the second key.
+    const bool ctrl=control(e->vkCode)?press:down(VK_CONTROL);
+    const bool menu=alt(e->vkCode)?press:down(VK_MENU);
+    const bool altGr=e->vkCode==VK_RMENU||down(VK_RMENU);
+    if(press&&!control(e->vkCode)&&!alt(e->vkCode))cancel();
+    if(active&&release&&(control(e->vkCode)||alt(e->vkCode)))finish();
+    if(press&&(control(e->vkCode)||alt(e->vkCode))&&!held&&ctrl&&menu&&!altGr&&!down(VK_SHIFT)&&!down(VK_LWIN)&&!down(VK_RWIN)&&permitted())begin();
+    // A cancelled gesture cannot rearm until both modifiers are released.
+    if(release&&!ctrl&&!menu)held=false;
+    // Do not swallow modifiers: every passed key-down retains its key-up.
+    return CallNextHookEx(keyboardHook,code,msg,data);
+  }
   if(e->vkCode==trigger){
     if(press&&held)return 1;
     if(press&&combination()&&GetTickCount64()-heartbeat.load()<2500&&(allowFullscreen||!fullscreen())){
-      held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");return 1;
+      begin();return 1;
     }
-    if(release&&held){held=false;if(active){if(GetForegroundWindow()!=foreground||GetTickCount64()-heartbeat.load()>2500||(!allowFullscreen&&fullscreen()))cancel();else{active=false;emit("RELEASE");}}return 1;}
+    if(release&&held){held=false;finish();return 1;}
   }
-  if(active&&release&&(e->vkCode==VK_CONTROL||e->vkCode==VK_LCONTROL||e->vkCode==VK_RCONTROL||e->vkCode==VK_MENU||e->vkCode==VK_LMENU||e->vkCode==VK_RMENU||((modifiers&MOD_SHIFT)&&(e->vkCode==VK_SHIFT||e->vkCode==VK_LSHIFT||e->vkCode==VK_RSHIFT))))cancel();
+  if(active&&release&&(control(e->vkCode)||alt(e->vkCode)||((modifiers&MOD_SHIFT)&&shift(e->vkCode))))finish();
   return CallNextHookEx(keyboardHook,code,msg,data);
 }
 static LRESULT CALLBACK mouse(int code,WPARAM msg,LPARAM data){
@@ -48,11 +72,13 @@ static LRESULT CALLBACK mouse(int code,WPARAM msg,LPARAM data){
 }
 int wmain(int argc,wchar_t** argv){
   if(argc!=4)return 2;wchar_t* end=nullptr;
-  trigger=static_cast<UINT>(wcstoul(argv[1],&end,10));if(!end||*end||!(trigger==VK_SPACE||(trigger>='A'&&trigger<='Z')||(trigger>='0'&&trigger<='9')||(trigger>=VK_F1&&trigger<=VK_F12)))return 2;
+  trigger=static_cast<UINT>(wcstoul(argv[1],&end,10));if(!end||*end||!(trigger==0||trigger==VK_SPACE||(trigger>='A'&&trigger<='Z')||(trigger>='0'&&trigger<='9')||(trigger>=VK_F1&&trigger<=VK_F12)))return 2;
   modifiers=static_cast<UINT>(wcstoul(argv[2],&end,10));if(!end||*end||(modifiers!=(MOD_CONTROL|MOD_ALT)&&modifiers!=(MOD_CONTROL|MOD_ALT|MOD_SHIFT)))return 2;
   if(wcscmp(argv[3],L"0")&&wcscmp(argv[3],L"1"))return 2;allowFullscreen=!wcscmp(argv[3],L"1");
   // Reserve the chord as well as observing key-up, so conflicting registrations fail explicitly.
-  if(!RegisterHotKey(nullptr,1,modifiers|MOD_NOREPEAT,trigger)){std::puts("ERROR KEY_CONFLICT");std::fflush(stdout);return 3;}
+  // Windows cannot reserve a modifiers-only chord. It is observed by the hook;
+  // combinations with a third key retain the explicit OS conflict check.
+  if(trigger&&!RegisterHotKey(nullptr,1,modifiers|MOD_NOREPEAT,trigger)){std::puts("ERROR KEY_CONFLICT");std::fflush(stdout);return 3;}
   ownerThread=GetCurrentThreadId();MSG msg{};PeekMessageW(&msg,nullptr,WM_USER,WM_USER,PM_NOREMOVE);
   keyboardHook=SetWindowsHookExW(WH_KEYBOARD_LL,keyboard,GetModuleHandleW(nullptr),0);mouseHook=SetWindowsHookExW(WH_MOUSE_LL,mouse,GetModuleHandleW(nullptr),0);
   if(!keyboardHook||!mouseHook){if(keyboardHook)UnhookWindowsHookEx(keyboardHook);if(mouseHook)UnhookWindowsHookEx(mouseHook);UnregisterHotKey(nullptr,1);return 4;}

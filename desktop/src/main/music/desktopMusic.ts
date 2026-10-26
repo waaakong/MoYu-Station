@@ -19,6 +19,8 @@ export class DesktopMusic {
     this.guard=new IpcGuard(main.webContents.id);
     this.shortcuts=new MediaShortcuts(globalShortcut,command=>{if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.mediaCommand,command);});
     const saved=desktopMusicSettingsSchema.safeParse(store.getSetting(KEY));if(saved.success)this.settings=saved.data;
+    // Upgrade the previous default gesture; preserve other customized chords.
+    if(this.settings.wheel?.accelerator==='Control+Alt+Space')this.settings.wheel.accelerator='Control+Alt';
     this.wheel=new DesktopWheel(command=>{
       if(command==='lyrics'){void this.toggleLyrics().catch(()=>{});return;}
       if(['sound','space','focus'].includes(command)){if(main.isMinimized())main.restore();main.show();main.focus();}
