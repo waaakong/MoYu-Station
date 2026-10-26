@@ -75,10 +75,14 @@ test("all eight JPEG PNG and WebP EXIF orientations are applied once and metadat
 });
 
 test("high-detail noise refuses oversize output instead of silently shrinking further", async ({ page }, info) => {
-  const width = 2560, height = 2560, raw = Buffer.alloc(width * height * 3); let seed = 123456789;
+  // This case isolates the 2 MiB output rejection, not the worker's CPU budget
+  // at maximum dimensions (covered separately by bounded-dimension tests).
+  // 2048px noise still exceeds the output cap after every supported encoding.
+  const width = 2048, height = 2048, raw = Buffer.alloc(width * height * 3); let seed = 123456789;
   for (let i = 0; i < raw.length; i++) { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; raw[i] = seed & 255; }
   const source = await sharp(raw, { raw: { width, height, channels: 3 } }).png().toBuffer();
   expect(source.length).toBeLessThanOrEqual(20 * 1024 * 1024);
+  expect(source.length).toBeGreaterThan(2 * 1024 * 1024);
   const result = await run(page, source, "image/png");
   expect(result).toMatchObject({ ok: false, code: "MEDIA_OUTPUT_SIZE" });
   await info.attach("high-detail-refusal", { body: JSON.stringify({ inputBytes: source.length, ...result }), contentType: "application/json" });

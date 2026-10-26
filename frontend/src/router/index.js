@@ -69,9 +69,13 @@ if (typeof window !== "undefined") {
   window.addEventListener("studyroom:account-banned", () => {
     const authStore = useAuthStore();
     authStore.markBanned();
-    if (!router.currentRoute.value.meta.localAccess && router.currentRoute.value.name !== "banned") {
-      router.push({ name: "banned" });
-    }
+    // During initial account restoration the first navigation has not committed.
+    // Decide against the actual destination, not the empty START_LOCATION route.
+    void router.isReady().then(() => {
+      if (authStore.isBanned && !router.currentRoute.value.meta.localAccess && router.currentRoute.value.name !== "banned") {
+        void router.push({ name: "banned" });
+      }
+    });
   });
 }
 

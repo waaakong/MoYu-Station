@@ -61,7 +61,7 @@ test('glass select host and trigger share rounded corners without clipping its p
     const corners=await select.evaluate(el=>({outer:getComputedStyle(el.parentElement!).borderRadius,inner:getComputedStyle(el).borderRadius}));
     expect(parseFloat(corners.outer)).toBeGreaterThan(0);expect(corners.outer).toBe(corners.inner);
     await select.click();const list=page.getByRole('listbox',{name:'难度'});await expect(list).toBeVisible();
-    await page.getByRole('option',{name:'4 × 4',exact:true}).click();await expect(select).toContainText('4 × 4');
+    await page.getByRole('option',{name:'普通 · 4 × 4',exact:true}).click();await expect(select).toContainText('4 × 4');
   }
 });
 

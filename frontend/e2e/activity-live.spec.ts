@@ -1,7 +1,11 @@
 import {expect,test,type Page} from '@playwright/test';
 
 async function setup(page:Page){
-  const now=Date.now(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  // Keep this single-day test away from midnight; day rollover has different
+  // expectations and must not discard the fixture's preceding 60 seconds.
+  const now=new Date('2026-10-26T12:00:00+08:00').getTime();
+  await page.clock.install({time:new Date(now)});
+  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
   const intervals:any[]=[{startMs:now-60000,endMs:now,state:'ONLINE'},{startMs:now-30000,endMs:now,state:'RELAX'}];
   const receipts=new Map<string,unknown>();
   await page.routeWebSocket('**/ws/**',socket=>socket.close());
@@ -31,13 +35,13 @@ test('profile uses second-level live intervals, counts only relaxation and dedup
   await expect(fish.locator('strong')).toHaveText('0 分 30 秒');await expect(effort.locator('strong')).not.toHaveText('99.00');
   const seconds=async()=>{const text=await online.locator('strong').innerText();const match=text.match(/(\d+) 分 (\d+) 秒/);return match?Number(match[1])*60+Number(match[2]):-1;};
   const before=await seconds();await expect.poll(seconds).toBeGreaterThan(before);await expect(fish.locator('strong')).toHaveText('0 分 30 秒');
-  const entered=Date.now();await page.getByRole('link',{name:'片刻放松',exact:true}).click();await expect(page.getByRole('heading',{name:'休息一下',exact:true})).toBeVisible();
+  const entered=await page.evaluate(()=>Date.now());await page.getByRole('link',{name:'片刻放松',exact:true}).click();await expect(page.getByRole('heading',{name:'休息一下',exact:true})).toBeVisible();
   await expect.poll(async()=>page.evaluate(async()=>{
     return new Promise<number>((resolve,reject)=>{const req=indexedDB.open('moyu-activity-v2',1);req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,q=db.transaction('outbox').objectStore('outbox').getAll();q.onsuccess=()=>{resolve(q.result.flatMap(r=>r.batch.segments).filter(s=>s.state==='RELAX').reduce((n,s)=>n+s.endMs-s.startMs,0));db.close();};};});
   })).toBeGreaterThan(1000);
   await page.getByRole('button',{name:'账号菜单'}).click();await page.getByRole('link',{name:'个人空间',exact:true}).click();await page.getByRole('button',{name:/学习统计/}).click();
   const fishSeconds=async()=>{const text=await fish.locator('strong').innerText(),m=text.match(/(\d+) 分 (\d+) 秒/);return m?Number(m[1])*60+Number(m[2]):-1;};
-  await expect.poll(fishSeconds).toBeGreaterThan(30);expect(await fishSeconds()).toBeLessThanOrEqual(30+Math.ceil((Date.now()-entered)/1000)+1);
+  await expect.poll(fishSeconds).toBeGreaterThan(30);expect(await fishSeconds()).toBeLessThanOrEqual(30+Math.ceil(((await page.evaluate(()=>Date.now()))-entered)/1000)+1);
   const after=await fishSeconds(),onlineBefore=await seconds();await expect.poll(seconds).toBeGreaterThan(onlineBefore+1);expect(await fishSeconds()).toBe(after);
   await expect.poll(()=>receipts.size,{timeout:20000}).toBeGreaterThan(0);expect(await fishSeconds()).toBe(after);
   for(const [width,height] of [[1440,900],[1280,720],[1080,640],[390,844]]){

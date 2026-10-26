@@ -8,7 +8,7 @@
       <button type="submit" :disabled="!query || providers.loading">{{providers.loading?'搜索中…':'搜索'}}</button>
     </form>
     <p v-if="providerId==='qq'" class="provider-library__error">登录 QQ 后可搜索并加载更多结果、查看歌单与收藏；仅播放平台允许的完整免费曲目，暂不支持微信登录。</p>
-    <p v-else-if="providerId==='kugou' && status?.supportsLogin!==false" class="provider-library__error">{{status?.capabilities.includes('playback')?'歌单、收藏和播放需官方账号登录；仅播放平台明确允许的完整免费曲目，不播放会员或试听音源。旧会话如提示需登录，请重新扫码。':'已接入官方账号登录与本机加密会话；目前仅提供公开搜索，歌单、收藏和播放尚未开启。'}}</p>
+    <p v-else-if="providerId==='kugou' && status?.supportsLogin!==false" class="provider-library__error">{{status?.capabilities.includes('playback')?'歌单、收藏和播放需官方账号登录；播放前核对当前账号权益，仅播放平台明确授权的完整音源，不播放试听片段。旧会话如提示需登录，请重新扫码。':'已接入官方账号登录与本机加密会话；目前仅提供公开搜索，歌单、收藏和播放尚未开启。'}}</p>
     <p v-else-if="status?.supportsLogin===false" class="provider-library__error">当前仅支持公开搜索，播放仍需完成官方验证适配。歌单、收藏与账号登录尚未接入。</p>
     <div v-if="library.view==='playlist'" class="provider-library__heading"><button type="button" @click="library.open('playlists')">返回歌单</button><h3>{{library.playlist?.name}}</h3></div>
     <ProviderLoginPrompt v-if="!auth.isLoggedIn || auth.isBanned" stage="moyu" @login="router.push('/login')" />

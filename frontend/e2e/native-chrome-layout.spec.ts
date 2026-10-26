@@ -27,6 +27,9 @@ for (const viewport of [{width:1440,height:900},{width:1280,height:720},{width:1
     await page.goto('/#/scene');
     await expect(page).toHaveTitle(/墨屿/);
     await expect(page.locator('#scene-title')).toBeVisible();
+    // The page can render while the native startup gate still owns keyboard
+    // focus. Wait for its real lifecycle, including the reduced-motion exit.
+    await expect(page.locator('#moyu-startup')).toHaveCount(0);
     const chrome=page.locator('.app-chrome--desktop');
     const primary=chrome.getByRole('navigation',{name:'主要功能'});
     const controls=[chrome.locator('.app-brand'),...['空间','社区','片刻放松'].map(name=>primary.getByRole('link',{name,exact:true})),chrome.getByRole('button',{name:'账号菜单'}),chrome.getByRole('group',{name:'窗口控制'})];
