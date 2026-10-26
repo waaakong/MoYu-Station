@@ -2,7 +2,7 @@ name: StudyRoom CI
 
 on:
   push:
-    branches: [main, refactor/electron-v2, codex/manifest-updates-ci-20261020, codex/manifest-production-pilot-20261021]
+    branches: [main]
   pull_request:
 
 permissions:
