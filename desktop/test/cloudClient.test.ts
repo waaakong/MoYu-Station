@@ -8,6 +8,12 @@ import { IPC_CHANNELS } from "@studyroom/contracts";
 const json = (data: unknown, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...headers } });
 
 describe("desktop cloud policy", () => {
+  it('accepts every supported release rollout step while retaining version, owner and field constraints',()=>{
+    const body={status:'ROLLING',rolloutPercentage:50,mandatory:false,reason:'fixture: staged rollout',expectedVersion:'2'};
+    const send=(value:unknown)=>validateCloudRequest({method:'PATCH',path:'/admin/client-updates/releases/6',json:JSON.stringify(value)});
+    for(const rolloutPercentage of [0,10,30,50,100])expect(send({...body,rolloutPercentage}).method).toBe('PATCH');
+    for(const value of [{...body,rolloutPercentage:49},{...body,rolloutPercentage:51},{...body,rolloutPercentage:'50'},{...body,ownerId:'2'},{...body,expectedVersion:2},{...body,expectedVersion:undefined}])expect(()=>send(value)).toThrow();
+  });
   it('allows the exact live activity read without widening owner or method scope',()=>{
     expect(validateCloudRequest({method:'GET',path:'/activity/live'}).path).toBe('/activity/live');
     for(const path of ['/activity/live?ownerId=2','/activity/live?date=2026-10-26','/activity/live/other','/activity/../admin/users','https://other.invalid/activity/live'])expect(()=>validateCloudRequest({method:'GET',path})).toThrow();

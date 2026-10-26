@@ -5,6 +5,14 @@ import {CloudClient} from '../../desktop/src/main/cloud/client';
 
 afterEach(()=>vi.unstubAllGlobals());
 describe('activity renderer to real desktop policy and cloud client',()=>{
+  it('sends 50 percent admin rollout through the actual main boundary without changing ownership or version checks',async()=>{
+    const fetcher=vi.fn(async(url:string,init?:RequestInit)=>new Response(JSON.stringify(url.endsWith('/auth/csrf')?{data:{token:'fixture-csrf'}}:{success:true,data:{status:'ROLLING',rolloutPercentage:50,policyVersion:'3'}}),{headers:{'content-type':'application/json'}}));
+    const client=new CloudClient('https://cloud.invalid',fetcher,vi.fn(),vi.fn());vi.stubGlobal('window',{studyRoomDesktop:{cloud:{request:(request:unknown)=>client.request(request)}}});
+    const data={status:'ROLLING',rolloutPercentage:50,mandatory:false,reason:'fixture: staged rollout',expectedVersion:'2'};
+    const response=await desktopCloudAdapter({method:'patch',url:'/admin/client-updates/releases/6',data:JSON.stringify(data),headers:new AxiosHeaders()});expect(response.status).toBe(200);
+    const write=fetcher.mock.calls.find(([url])=>url.endsWith('/admin/client-updates/releases/6'));expect(write?.[1]?.method).toBe('PATCH');expect(JSON.parse(String(write?.[1]?.body))).toEqual(data);expect(write?.[1]?.headers).toHaveProperty('X-CSRF-Token','fixture-csrf');
+    const count=fetcher.mock.calls.length;await expect(desktopCloudAdapter({method:'patch',url:'/admin/client-updates/releases/6',data:JSON.stringify({...data,ownerId:'2'}),headers:new AxiosHeaders()})).rejects.toThrow();expect(fetcher).toHaveBeenCalledTimes(count);
+  });
   it('carries live reads and every legacy/new outbox state through the actual main-process boundary',async()=>{
     const fetcher=vi.fn(async(url:string,init?:RequestInit)=>{
       let data:unknown={date:'2026-10-26',timeZone:'Asia/Shanghai',segments:[],partial:false,hasLegacy:false};

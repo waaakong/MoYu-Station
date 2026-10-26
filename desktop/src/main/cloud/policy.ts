@@ -154,7 +154,7 @@ export function validateCloudRequest(input: unknown): CloudRequest {
     } else if(url.search)throw new Error('CLOUD_REQUEST_BLOCKED');
     if(request.method==='PATCH') {
       if(!request.json || request.form || request.binary)throw new Error('CLOUD_REQUEST_BLOCKED');
-      z.object({status:z.enum(['DRAFT','PILOT','ROLLING','FULL','PAUSED','WITHDRAWN']),rolloutPercentage:z.union([z.literal(0),z.literal(10),z.literal(30),z.literal(100)]),mandatory:z.boolean(),minimumSupportedVersion:z.string().max(100).nullable().optional(),releaseNotes:z.string().max(1000).nullable().optional(),reason:z.string().trim().min(1).max(300),expectedVersion:z.string().regex(/^(0|[1-9][0-9]{0,18})$/).refine(v=>BigInt(v)<9223372036854775807n)}).strict().parse(JSON.parse(request.json));
+      z.object({status:z.enum(['DRAFT','PILOT','ROLLING','FULL','PAUSED','WITHDRAWN']),rolloutPercentage:z.union([z.literal(0),z.literal(10),z.literal(30),z.literal(50),z.literal(100)]),mandatory:z.boolean(),minimumSupportedVersion:z.string().max(100).nullable().optional(),releaseNotes:z.string().max(1000).nullable().optional(),reason:z.string().trim().min(1).max(300),expectedVersion:z.string().regex(/^(0|[1-9][0-9]{0,18})$/).refine(v=>BigInt(v)<9223372036854775807n)}).strict().parse(JSON.parse(request.json));
     }
   }
   if (/^\/feed\/follows\//.test(pathname) && (request.json !== undefined || request.form || request.binary)) throw new Error('CLOUD_REQUEST_BLOCKED');
