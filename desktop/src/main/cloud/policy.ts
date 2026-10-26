@@ -1,12 +1,13 @@
 import { z } from "zod";
 import type { CloudRequest } from "@studyroom/contracts";
+import { activityKinds } from "@studyroom/contracts";
 
 const id = "[1-9][0-9]{0,18}";
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const rules: Record<CloudRequest["method"], RegExp[]> = {
   GET: [
     new RegExp(`^/feed/posts/${id}$`),
-    /^\/activity\/capabilities$/,new RegExp(`^/activity/requests/${uuid}$`),
+    /^\/activity\/(capabilities|live)$/,new RegExp(`^/activity/requests/${uuid}$`),
     /^\/operations\/capabilities$/,new RegExp(`^/operations/(COMMENT|FEEDBACK|INVITATION)/${uuid}$`),
     /^\/scenes\/custom$/,new RegExp(`^/scenes/custom/requests/${uuid}$`),
     /^\/media\/capabilities$/, /^\/stickers\/favorites$/,
@@ -71,7 +72,7 @@ export function validateCloudRequest(input: unknown): CloudRequest {
     if(url.search||request.form||request.binary)throw new Error('CLOUD_REQUEST_BLOCKED');
     if(request.method==='POST'){
       if(!request.json||request.json.length>16384)throw new Error('CLOUD_REQUEST_BLOCKED');
-      z.object({requestId:z.string().uuid(),sessionId:z.string().uuid(),sequence:z.number().int().min(1).max(1000000),partial:z.boolean(),segments:z.array(z.object({startMs:z.number().int().positive().safe(),endMs:z.number().int().positive().safe(),state:z.enum(['FOCUS','IDLE'])}).strict().refine(s=>s.endMs>s.startMs&&s.endMs-s.startMs<=30000)).min(1).max(64)}).strict().parse(JSON.parse(request.json));
+      z.object({requestId:z.string().uuid(),sessionId:z.string().uuid(),sequence:z.number().int().min(1).max(1000000),partial:z.boolean(),segments:z.array(z.object({startMs:z.number().int().positive().safe(),endMs:z.number().int().positive().safe(),state:z.enum(activityKinds)}).strict().refine(s=>s.endMs>s.startMs&&s.endMs-s.startMs<=30000)).min(1).max(64)}).strict().parse(JSON.parse(request.json));
     }else if(request.json)throw new Error('CLOUD_REQUEST_BLOCKED');
   }
   if(pathname==='/profile/share-card' && url.search && !/^\?date=\d{4}-\d{2}-\d{2}$/.test(url.search))throw new Error('CLOUD_REQUEST_BLOCKED');

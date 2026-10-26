@@ -8,6 +8,18 @@ import { IPC_CHANNELS } from "@studyroom/contracts";
 const json = (data: unknown, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...headers } });
 
 describe("desktop cloud policy", () => {
+  it('allows the exact live activity read without widening owner or method scope',()=>{
+    expect(validateCloudRequest({method:'GET',path:'/activity/live'}).path).toBe('/activity/live');
+    for(const path of ['/activity/live?ownerId=2','/activity/live?date=2026-10-26','/activity/live/other','/activity/../admin/users','https://other.invalid/activity/live'])expect(()=>validateCloudRequest({method:'GET',path})).toThrow();
+    for(const method of ['POST','PUT','PATCH','DELETE'])expect(()=>validateCloudRequest({method,path:'/activity/live'})).toThrow();
+    expect(()=>validateCloudRequest({method:'GET',path:'/activity/live',json:'{}'})).toThrow();
+  });
+  it('keeps legacy outbox batches and accepts new page timing without accepting fabricated states or owners',()=>{
+    const batch={requestId:'11111111-1111-4111-8111-111111111111',sessionId:'22222222-2222-4222-8222-222222222222',sequence:1,partial:false,segments:[{startMs:10000,endMs:11000,state:'RELAX'}]};
+    const send=(body:unknown)=>validateCloudRequest({method:'POST',path:'/activity/intervals',json:JSON.stringify(body)});
+    for(const state of ['FOCUS','IDLE','FOCUS_V3','ONLINE','RELAX'])expect(send({...batch,segments:[{...batch.segments[0],state}]}).method).toBe('POST');
+    for(const body of [{...batch,ownerId:'2'},{...batch,segments:[{...batch.segments[0],state:'ANY'}]},{...batch,segments:[{...batch.segments[0],endMs:41001}]},{...batch,segments:Array(65).fill(batch.segments[0])}])expect(()=>send(body)).toThrow();
+  });
   it('allows only scoped read-only reliable-create queries',()=>{
     const path='/operations/FEEDBACK/11111111-1111-4111-8111-111111111111';
     expect(validateCloudRequest({method:'GET',path}).path).toBe(path);
