@@ -34,7 +34,9 @@ export class KugouMusicApi {
     if(trackId.startsWith('audio:')?value.album_audio_id!==trackId.slice(6):value.encode_album_audio_id!==trackId)throw new ProviderError('PROVIDER_API_CHANGED');
     return value;
   }
-  private allowed(value:z.infer<typeof song>){return value.has_privilege&&value.is_free_part===0&&value.privilege===0&&Number(value.privilege2)===0&&!!value.play_url;}
+  // Catalog payment/privilege flags describe the recording, not this session's
+  // entitlement. Only the authenticated full-play grant can authorize media.
+  private allowed(value:z.infer<typeof song>){return value.has_privilege&&value.is_free_part===0&&value.privilege>=0&&Number(value.privilege2)>=0&&!!value.play_url;}
   async trackDetails(input:unknown,session:KugouSession|undefined,signal:AbortSignal){
     const {trackId}=parse(z.object({trackId:kugouTrackId}).strict(),input),s=await this.song(trackId,session,signal),available=this.allowed(s);
     return normalizeProviderTrack({providerId:'kugou',trackId,title:s.song_name,artists:s.author_name.split('、'),album:s.album_name,artworkUrl:s.img,durationMs:s.timelength,available,badges:[],rights:available?'available':'unavailable'});

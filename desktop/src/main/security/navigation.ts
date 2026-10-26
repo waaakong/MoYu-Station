@@ -10,13 +10,14 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
 ]);
 
 export function validateExternalUrl(value: string): URL {
+  if (typeof value !== 'string' || value.length > 4096) throw new Error('EXTERNAL_URL_BLOCKED');
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     throw new Error("EXTERNAL_URL_INVALID");
   }
-  if (url.protocol !== "https:" || !ALLOWED_EXTERNAL_HOSTS.has(url.hostname.toLowerCase())) {
+  if (url.protocol !== "https:" || url.username || url.password || url.port || !ALLOWED_EXTERNAL_HOSTS.has(url.hostname.toLowerCase())) {
     throw new Error("EXTERNAL_URL_BLOCKED");
   }
   return url;

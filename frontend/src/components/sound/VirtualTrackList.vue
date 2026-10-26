@@ -33,7 +33,7 @@
         <option v-for="playlist in playlists" :key="playlist.id" :value="playlist.id">{{ playlist.name }}</option>
       </AppSelect>
       <AppSelect v-else-if="entry.track.providerCandidates && entry.track.providerCandidates.length > 1" class="track-source" :value="entry.track.selectedProviderId" :aria-label="`选择 ${entry.track.title} 的播放来源`" @change="selectProviderSource(entry.track, $event)">
-        <option v-for="candidate in entry.track.providerCandidates" :key="candidate.id" :value="candidate.providerId" :disabled="!candidate.isAvailable || candidate.rights !== 'available'">{{ providerLabel(candidate.providerId) }}{{ candidate.isAvailable && candidate.rights === 'available' ? '' : ' · 受限' }}</option>
+        <option v-for="candidate in entry.track.providerCandidates" :key="candidate.id" :value="candidate.providerId" :disabled="(!candidate.isAvailable || candidate.rights !== 'available')&&!canVerifyCandidateRights(candidate)">{{ providerLabel(candidate.providerId) }}{{ candidate.isAvailable && candidate.rights === 'available' ? '' : canVerifyCandidateRights(candidate)?' · 点击验证账号权限':' · 受限' }}</option>
       </AppSelect>
       <span v-else aria-hidden="true"></span>
     </div>
@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import TrackBadges from "./TrackBadges.vue";
-import { providerAvailabilityText, trackPlayLabel } from "../../audio/providerTrackBadges";
+import { providerAvailabilityText, trackPlayLabel,canVerifyCandidateRights } from "../../audio/providerTrackBadges";
 import TrackArtwork from "./TrackArtwork.vue";
 import type { LocalPlaylistSummary, ProviderId, Track } from "@studyroom/contracts";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";

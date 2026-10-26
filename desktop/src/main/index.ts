@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path";
+import {configureMetadataWorkerFactory,metadataEnvironment,type MetadataWorker} from '../audio/library/metadataProcess';
 import { pathToFileURL } from "node:url";
 import { registerCloudBridge } from "./cloud/register";
 import {
@@ -54,6 +55,7 @@ import { DEFAULT_DESKTOP_MUSIC } from "./music/shortcuts";
 let desktopMusic:DesktopMusic|undefined;
 
 registerMediaScheme();
+configureMetadataWorkerFactory(()=>utilityProcess.fork(join(app.getAppPath(),'dist/main/metadata-worker.cjs'),[],{serviceName:'MoYu bounded metadata',execArgv:['--max-old-space-size=96'],env:metadataEnvironment()}) as unknown as MetadataWorker);
 
 // Keep the existing on-disk identity while the user-facing product name changes.
 // Explicit --user-data-dir remains authoritative for smoke tests and diagnostics.
@@ -171,6 +173,9 @@ async function createTray(): Promise<void> {
   tray.setToolTip("墨屿自习室 · MoYu Station");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "显示墨屿自习室", click: () => windowManager?.show() },
+      { label: "显示／隐藏桌面歌词", click: () => {void desktopMusic?.toggleLyrics().catch(()=>{});} },
+      { label: "解锁桌面歌词", click: () => {void desktopMusic?.unlockLyrics().catch(()=>{});} },
+      { label: "找回桌面歌词位置", click: () => desktopMusic?.resetLyricsPosition() },
     { type: "separator" },
     {
       label: "退出程序",
@@ -368,9 +373,9 @@ async function startApplication(): Promise<void> {
   // Keep the real IPC surface in smoke tests without taking global media keys
   // from another application. Smoke always uses its own temporary user data.
   if (smokeTest) databaseStore.setSetting("music.desktop-v1", {
-    ...structuredClone(DEFAULT_DESKTOP_MUSIC), shortcutsEnabled: false
+    ...structuredClone(DEFAULT_DESKTOP_MUSIC), shortcutsEnabled: false,wheel:{...structuredClone(DEFAULT_DESKTOP_MUSIC.wheel!),enabled:false}
   });
-  desktopMusic = new DesktopMusic(windowManager.window, databaseStore);
+    desktopMusic = new DesktopMusic(windowManager.window, databaseStore);
   // An HTML document can load successfully even when its module bundle is missing.
   // Native recovery is allowed only before App setup binds the save-aware runtime.
   if (!smokeTest) {

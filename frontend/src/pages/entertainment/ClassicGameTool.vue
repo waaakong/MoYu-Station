@@ -1,7 +1,7 @@
 <template>
   <section class="classic-game" :class="{ 'classic-game--fitted': fittedBoard }" :aria-label="title" @keydown.esc="cancelSelection">
     <header class="game-toolbar">
-      <label v-if="toolId==='puzzle'">难度 <AppSelect v-model.number="option" class="sr-glass-control" aria-label="难度"><option :value="3">3 × 3</option><option :value="4">4 × 4</option></AppSelect></label>
+      <label v-if="toolId==='puzzle'">难度 <AppSelect v-model.number="option" class="sr-glass-control" aria-label="难度"><option :value="3">简单 · 3 × 3</option><option :value="4">普通 · 4 × 4</option><option :value="6">困难 · 6 × 6</option></AppSelect></label>
       <label v-if="toolId==='minesweeper'">难度 <AppSelect v-model.number="option" class="sr-glass-control" aria-label="难度"><option :value="0">初级 9×9 · 10 雷</option><option :value="1">中级 16×16 · 40 雷</option><option :value="2">高级 30×16 · 99 雷</option></AppSelect></label>
       <label v-if="toolId==='spider'">花色 <AppSelect v-model.number="option" class="sr-glass-control" aria-label="花色"><option :value="1">单花色</option><option :value="2">双花色</option><option :value="4">四花色</option></AppSelect></label>
       <button class="sr-glass-control" type="button" :disabled="loading" @click="confirmNew=true">开始新局</button>
@@ -16,7 +16,7 @@
       <template v-if="game.toolId==='puzzle'">
         <p>选择两个方块交换位置，恢复完整风景。已交换 {{ game.moves }} 次。</p>
         <div class="puzzle-grid" :style="{gridTemplateColumns:`repeat(${game.size},1fr)`}">
-          <button v-for="(tile,index) in game.tiles" :key="index" type="button" :aria-label="`位置 ${index+1}，图片块 ${tile+1}`" :aria-pressed="selectedTile===index" :style="{backgroundImage:`url(${puzzleImage})`,backgroundSize:`${game.size*100}% ${game.size*100}%`,backgroundPosition:`${tile%game.size/(game.size-1)*100}% ${Math.floor(tile/game.size)/(game.size-1)*100}%`}" @click="puzzleClick(index)"><span>{{ tile+1 }}</span></button>
+          <button v-for="(tile,index) in game.tiles" :key="index" type="button" :aria-label="`第 ${Math.floor(index/game.size)+1} 行，第 ${index%game.size+1} 列`" :aria-pressed="selectedTile===index" :style="{backgroundImage:`url(${puzzleImage})`,backgroundSize:`${game.size*100}% ${game.size*100}%`,backgroundPosition:`${tile%game.size/(game.size-1)*100}% ${Math.floor(tile/game.size)/(game.size-1)*100}%`}" @click="puzzleClick(index)"></button>
         </div>
       </template>
       <template v-else-if="game.toolId==='game2048'">
@@ -94,7 +94,7 @@ watch(fitViewport,element=>{
 const puzzleImage=sceneAssetCatalog.mountain.afternoon.standard.jpg;
 type Direction='left'|'right'|'up'|'down';const directions:Array<{key:Direction;label:string;symbol:string}>=[{key:'left',label:'左',symbol:'←'},{key:'up',label:'上',symbol:'↑'},{key:'down',label:'下',symbol:'↓'},{key:'right',label:'右',symbol:'→'}];
 const status=computed(()=>{const s=game.value;if(!s)return '';if(s.toolId==='puzzle')return puzzleWon(s)?'拼图完成':'交换拼图';if(s.toolId==='game2048')return !canMove2048(s)?'没有可移动方向':s.won?'已达成 2048，可继续':'合成 2048';if(s.toolId==='minesweeper')return {ready:'等待首次揭开',playing:'进行中',won:'全部安全格已揭开',lost:'踩到地雷，本局结束'}[s.status];return s.completed.length===8?'八组全部收齐':'同花色 K → A 自动收牌';});
-function factory():ClassicGame{const generation=crypto.randomUUID();switch(props.toolId){case'puzzle':return newPuzzle(option.value===4?4:3,generation);case'game2048':return new2048(generation);case'minesweeper':return newMines(option.value===2?2:option.value===1?1:0,generation);case'spider':return newSpider(option.value===4?4:option.value===2?2:1,generation);}}
+function factory():ClassicGame{const generation=crypto.randomUUID();switch(props.toolId){case'puzzle':return newPuzzle(option.value===6?6:option.value===4?4:3,generation);case'game2048':return new2048(generation);case'minesweeper':return newMines(option.value===2?2:option.value===1?1:0,generation);case'spider':return newSpider(option.value===4?4:option.value===2?2:1,generation);}}
 function persist(value:ClassicGame){void storage.save(value).catch(()=>{if(!disposed)notice.value=storage.reason;});}
 function update(value:ClassicGame){if(blocked.value || value===game.value)return;cancelDrag();game.value=value;interactionNote.value='';persist(value);}
 function startNew(){if(blocked.value)return;selectedTile.value=null;selectedCard.value=null;game.value=factory();confirmNew.value=false;persist(game.value);}

@@ -26,6 +26,7 @@ import {
   type LocalPlaylistItem,
   type LocalPlaylistSummary,
   type MediaCommand,
+  DESKTOP_WHEEL_COMMANDS,type DesktopWheelCommand,
   type MissingTrack,
   type PlaylistNameRequest,
   type PlaylistRequest,
@@ -252,6 +253,10 @@ const bridge: StudyRoomDesktopBridge = Object.freeze({
     };
     ipcRenderer.on(IPC_CHANNELS.mediaCommand, wrapped);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.mediaCommand, wrapped);
+  },
+  onWheelCommand: (listener:(command:DesktopWheelCommand)=>void)=>{
+    const wrapped=(_event:Electron.IpcRendererEvent,value:unknown)=>{if(typeof value==='string'&&(DESKTOP_WHEEL_COMMANDS as readonly string[]).includes(value))listener(value as DesktopWheelCommand);};
+    ipcRenderer.on(IPC_CHANNELS.desktopWheelCommand,wrapped);return()=>ipcRenderer.removeListener(IPC_CHANNELS.desktopWheelCommand,wrapped);
   },
   minimizeWindow: () => invoke<void>(IPC_CHANNELS.windowMinimize),
   toggleMaximizeWindow: () => invoke<boolean>(IPC_CHANNELS.windowToggleMaximize),

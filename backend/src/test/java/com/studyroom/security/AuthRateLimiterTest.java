@@ -89,14 +89,28 @@ class AuthRateLimiterTest {
   }
 
   @Test
-  void forwardedAddressIsTrustedOnlyFromLoopbackProxy() {
+  void overwrittenRealAddressIsTrustedOnlyFromLoopbackProxy() {
     MockHttpServletRequest proxy = request("127.0.0.1");
-    proxy.addHeader("X-Forwarded-For", "198.51.100.7, 127.0.0.1");
+    proxy.addHeader("X-Forwarded-For", "198.51.100.99, 198.51.100.7");
+    proxy.addHeader("X-Real-IP", "198.51.100.7");
     assertThat(AuthRateLimiter.clientAddress(proxy)).isEqualTo("198.51.100.7");
 
     MockHttpServletRequest direct = request("203.0.113.2");
     direct.addHeader("X-Forwarded-For", "198.51.100.9");
+    direct.addHeader("X-Real-IP", "198.51.100.9");
     assertThat(AuthRateLimiter.clientAddress(direct)).isEqualTo("203.0.113.2");
+  }
+
+  @Test
+  void ignoresForgedForwardedPrefixAndInvalidRealAddress() {
+    MockHttpServletRequest proxy = request("::1");
+    proxy.addHeader("X-Forwarded-For", "198.51.100.99");
+    assertThat(AuthRateLimiter.clientAddress(proxy)).isEqualTo("::1");
+    proxy.addHeader("X-Real-IP", "198.51.100.1, 198.51.100.2");
+    assertThat(AuthRateLimiter.clientAddress(proxy)).isEqualTo("::1");
+    MockHttpServletRequest ipv6 = request("127.0.0.1");
+    ipv6.addHeader("X-Real-IP", "2001:db8::7");
+    assertThat(AuthRateLimiter.clientAddress(ipv6)).isEqualTo("2001:db8::7");
   }
 
   private MockHttpServletRequest request(String remoteAddress) {

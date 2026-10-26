@@ -119,6 +119,8 @@ export const IPC_CHANNELS = {
   desktopMusicSave: "desktop-music:save",
   desktopMusicState: "desktop-music:state",
   desktopLyricsPublish: "desktop-music:lyrics",
+  desktopLyricsAction: "desktop-lyrics:action",
+  desktopWheelCommand: "desktop-wheel:command",
   windowMinimize: "window:minimize",
   windowToggleMaximize: "window:toggle-maximize",
   windowClose: "window:close",
@@ -519,6 +521,7 @@ export interface StudyRoomDesktopBridge {
   installUpdate(): Promise<void>;
   onUpdateStatus(listener: (event: UpdateStatusChangedEvent) => void): () => void;
   onMediaCommand(listener: (command: MediaCommand) => void): () => void;
+  onWheelCommand?(listener: (command: import('./desktopMusic').DesktopWheelCommand) => void): () => void;
   minimizeWindow(): Promise<void>;
   toggleMaximizeWindow(): Promise<boolean>;
   closeWindow(): Promise<void>;

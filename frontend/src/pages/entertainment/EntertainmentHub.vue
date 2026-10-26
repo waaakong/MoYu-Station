@@ -29,7 +29,7 @@ const assets = [
 const tools: Array<{ id: AvailableToolId; name: string; description: string; webp: string; jpg: string }> = [
   { id: "breathing", name: "一分钟呼吸", description: "跟随节奏，慢慢放松", ...assets[0] },
   { id: "wooden-fish", name: "电子木鱼", description: "敲几下，让思绪落地", ...assets[1] },
-  { id: "puzzle", name: "风景拼图", description: "3×3／4×4，交换还原风景", ...assets[2] },
+  { id: "puzzle", name: "风景拼图", description: "3×3／4×4／6×6，无编号还原风景", ...assets[2] },
   { id: "game2048", name: "2048", description: "方向合并，慢慢抵达 2048", ...assets[3] },
   { id: "minesweeper", name: "扫雷", description: "经典三档，首次揭开周围安全", ...assets[4] },
   { id: "spider", name: "蜘蛛纸牌", description: "单／双／四花色，完整经典规则", ...assets[3] }

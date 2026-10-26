@@ -19,7 +19,11 @@ describe('Kugou official web music',()=>{
  await expect(api.playback(input,session,signal())).resolves.toMatchObject({providerId:'kugou',trackId:input.trackId,expiresAt:61000,allowedHosts:['webfs.kugou.com']});
  expect(transport.mock.calls[0]?.[0]).toBe('kugouSong');expect(transport.mock.calls[0]?.[1]).toMatchObject({mid:session.mid,uuid:session.mid,token:session.token,encode_album_audio_id:input.trackId});
  });
- it.each([{is_free_part:1},{privilege:8},{privilege2:'8'},{has_privilege:false},{play_url:''}])('rejects partial or unverified rights %j',async(patch)=>{const value=song();Object.assign(value.data,patch);await expect(new KugouMusicApi(async()=>value).playback(input,session,signal())).rejects.toMatchObject({code:'PROVIDER_RIGHTS_RESTRICTED'});});
+ it.each([{is_free_part:1},{privilege:8,has_privilege:false},{privilege2:'8',is_free_part:1},{has_privilege:false},{play_url:''}])('rejects partial or unverified rights %j',async(patch)=>{const value=song();Object.assign(value.data,patch);await expect(new KugouMusicApi(async()=>value).playback(input,session,signal())).rejects.toMatchObject({code:'PROVIDER_RIGHTS_RESTRICTED'});});
+ it('uses authenticated full-play permission rather than treating catalog payment flags as denial',async()=>{
+   const value=song();Object.assign(value.data,{privilege:8,privilege2:'8'});
+   await expect(new KugouMusicApi(async()=>value).playback(input,session,signal())).resolves.toMatchObject({providerId:'kugou',trackId:input.trackId});
+ });
  it.each(['http://webfs.kugou.com/a.mp3','https://127.0.0.1/a.mp3','https://webfs.kugou.com.evil.test/a.mp3','https://webfs.kugou.com/a.enc','https://user@webfs.kugou.com/a.mp3'])('rejects unsafe media %s',async(url)=>{const value=song();value.data.play_url=url;await expect(new KugouMusicApi(async()=>value).playback(input,session,signal())).rejects.toThrow();});
  it('rejects mismatched song identity, malformed payload and expired sessions',async()=>{
  const value=song();value.data.encode_album_audio_id='other';await expect(new KugouMusicApi(async()=>value).playback(input,session,signal())).rejects.toMatchObject({code:'PROVIDER_API_CHANGED'});

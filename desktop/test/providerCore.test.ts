@@ -27,6 +27,19 @@ function adapter(search: ProviderAdapter["search"]): ProviderAdapter {
 }
 
 describe("provider coordination core", () => {
+  it('rechecks explicitly selected Kugou catalog restrictions with the logged-in song endpoint',async()=>{
+    const coordinator=new ProviderCoordinator({experimentalBuild:true,consentGranted:true,enabledProviders:{kugou:true}});
+    const catalog={id:'kugou:vip-id',providerId:'kugou',trackId:'vip-id',title:'Synthetic',artists:['Test'],durationMs:120000,versionTags:[],quality:'standard',isAvailable:false,rights:'unavailable'} as ProviderTrackRef;
+    const details=vi.fn(async()=>({...catalog,isAvailable:true,rights:'available'} as ProviderTrackRef));
+    const play=vi.fn(async()=>({providerId:'kugou' as const,trackId:'vip-id',url:new URL('https://webfs.kugou.com/test.mp3'),expiresAt:Date.now()+10000,allowedHosts:['webfs.kugou.com']}));
+    coordinator.register('kugou',()=>({...adapter(async()=>[catalog]),providerId:'kugou',capabilities:['search','playback'],trackDetails:details,resolvePlayback:play}));
+    const result=await coordinator.searchAggregated('synthetic',['kugou'],10),id=result.items[0]!.id;
+    const request={providerId:'kugou' as const,trackId:id,providerTrackId:'vip-id',playbackSessionId:'synthetic-session'};
+    expect((await coordinator.resolveKnownPlayback(request)).trackId).toBe('vip-id');expect(details).toHaveBeenCalledOnce();
+    details.mockResolvedValue(catalog);
+    await expect(coordinator.resolveKnownPlayback(request)).rejects.toMatchObject({code:'PROVIDER_RIGHTS_RESTRICTED'});
+    expect(play).toHaveBeenCalledOnce();await coordinator.dispose();
+  });
   it("revalidates an exact persisted queue identity after restart without trusting saved rights",async()=>{
     const coordinator=new ProviderCoordinator({experimentalBuild:true,consentGranted:true,enabledProviders:{netease:true}});
     const fresh={providerId:"netease",trackId:"1",rights:"available",isAvailable:true} as ProviderTrackRef;

@@ -2,7 +2,7 @@
 export const CLASSIC_GAME_IDS=['puzzle','game2048','minesweeper','spider'] as const;
 export type ClassicGameId=typeof CLASSIC_GAME_IDS[number];
 type Base={version:1;generation:string;revision:number};
-export type PuzzleGame=Base&{toolId:'puzzle';size:3|4;tiles:number[];moves:number};
+export type PuzzleGame=Base&{toolId:'puzzle';size:3|4|6;tiles:number[];moves:number};
 export type Game2048=Base&{toolId:'game2048';board:number[];score:number;won:boolean};
 export type MinesGame=Base&{toolId:'minesweeper';difficulty:0|1|2;mines:number[];revealed:number[];flags:number[];status:'ready'|'playing'|'won'|'lost'};
 export type SpiderCollection=[column:number,cards:number[],flipped:boolean];
@@ -14,7 +14,8 @@ const clone=<T>(value:T):T=>JSON.parse(JSON.stringify(value));
 function index(length:number,random:Random){const value=random();if(!Number.isFinite(value) || value<0 || value>=1)throw new Error('GAME_RANDOM_INVALID');return Math.floor(value*length);}
 export function shuffled<T>(items:readonly T[],random:Random):T[]{const result=[...items];for(let i=result.length-1;i>0;i--){const j=index(i+1,random);[result[i],result[j]]=[result[j]!,result[i]!];}return result;}
 const base=(generation:string):Base=>({version:1,generation,revision:0});
-export function newPuzzle(size:3|4,generation:string,random:Random=Math.random):PuzzleGame{
+export function newPuzzle(size:3|4|6,generation:string,random:Random=Math.random):PuzzleGame{
+  if(![3,4,6].includes(size))throw new Error('PUZZLE_SIZE_INVALID');
   const tiles=shuffled(Array.from({length:size*size},(_,i)=>i),random);if(tiles.every((n,i)=>n===i))[tiles[0],tiles[1]]=[tiles[1]!,tiles[0]!];
   return{...base(generation),toolId:'puzzle',size,tiles,moves:0};
 }
@@ -117,7 +118,7 @@ export function isClassicGame(value:unknown):value is ClassicGame{
     if(!value || typeof value!=='object' || new TextEncoder().encode(JSON.stringify(value)).length>32768)return false;
     const s=value as any;if(s.version!==1 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s.generation) || !integer(s.revision,0,Number.MAX_SAFE_INTEGER))return false;
     const keys=(names:string[])=>Object.keys(s).every(key=>['version','generation','revision','toolId',...names].includes(key));
-    if(s.toolId==='puzzle')return keys(['size','tiles','moves']) && [3,4].includes(s.size) && list(s.tiles,0,s.size*s.size-1,s.size*s.size) && s.tiles.length===s.size*s.size && unique(s.tiles) && integer(s.moves,0,s.revision);
+    if(s.toolId==='puzzle')return keys(['size','tiles','moves']) && [3,4,6].includes(s.size) && list(s.tiles,0,s.size*s.size-1,s.size*s.size) && s.tiles.length===s.size*s.size && unique(s.tiles) && integer(s.moves,0,s.revision);
     if(s.toolId==='game2048')return keys(['board','score','won']) && list(s.board,0,2**40,16) && s.board.length===16 && s.board.every((v:number)=>v===0 || v>=2 && Number.isInteger(Math.log2(v))) && integer(s.score,0,Number.MAX_SAFE_INTEGER) && typeof s.won==='boolean';
     if(s.toolId==='minesweeper'){
       if(!keys(['difficulty','mines','revealed','flags','status']) || ![0,1,2].includes(s.difficulty))return false;const {width,height,count}=MINES_LEVELS[s.difficulty as 0|1|2],cells=width*height;

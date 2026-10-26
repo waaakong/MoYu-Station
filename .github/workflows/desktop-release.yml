@@ -71,6 +71,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate releases including drafts' }
           if ($existing) { throw 'Release already exists: never overwrite assets, create a new version' }
       - run: npm ci
+      - name: Install pinned Electron runtime with upstream checksum verification
+        run: node node_modules/electron/install.js
       - name: Tests and release signing configuration
         run: |
           npm run check:secrets

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import signingModule from './update-signing-config.cjs';
+import {buildNative} from './build-native.mjs';
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = resolve(desktopRoot, "dist");
@@ -45,6 +46,7 @@ await mkdir(resolve(distRoot, "main"), { recursive: true });
 await mkdir(resolve(distRoot, "preload"), { recursive: true });
 await mkdir(resolve(distRoot, "renderer"), { recursive: true });
 await mkdir(resolve(distRoot, "providers"), { recursive: true });
+buildNative(desktopRoot);
 await cp(resolve(desktopRoot, "resources/brand"), resolve(distRoot, "brand"), { recursive: true });
 
 const common = {
@@ -83,6 +85,7 @@ await build({
   outfile: resolve(distRoot, "providers/worker.cjs"),
   format: "cjs"
 });
+await build({...common,entryPoints:[resolve(desktopRoot,'src/audio/library/metadata-worker.mjs')],outfile:resolve(distRoot,'main/metadata-worker.cjs'),format:'cjs'});
 
 await build({
   ...common,
@@ -99,3 +102,5 @@ await cp(
 console.log("Electron main, preload, provider worker, and recovery assets built.");
 await build({...common,entryPoints:[resolve(desktopRoot,'src/preload/lyrics.ts')],outfile:resolve(distRoot,'preload/lyrics.cjs'),format:'cjs'});
 for(const name of ['lyrics.html','lyrics.css','lyrics.js'])await cp(resolve(desktopRoot,'src/renderer',name),resolve(distRoot,'renderer',name));
+await build({...common,entryPoints:[resolve(desktopRoot,'src/preload/wheel.ts')],outfile:resolve(distRoot,'preload/wheel.cjs'),format:'cjs'});
+for(const name of ['wheel.html','wheel.css','wheel.js'])await cp(resolve(desktopRoot,'src/renderer',name),resolve(distRoot,'renderer',name));

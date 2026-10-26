@@ -14,16 +14,20 @@ export async function saveDesktopMusic(settings:DesktopMusicSettings){
 export function startDesktopLyrics(){
   const bridge=window.studyRoomDesktop;if(!bridge?.getDesktopMusic)return ()=>{};
   const player=usePlayerStore(),providers=useProvidersStore(),controller=new LyricsController();
-  let epoch=0,disposed=false,failed=false,lastFrame='';
+  let epoch=0,disposed=false,failed=false,lastFrame='',lastSentAt=0,lastPosition=0,lastLine=-1,lastStatus='';
   function publish(){
     if(disposed||!desktopMusicState.state?.settings.lyricsVisible)return;
-    const state=controller.snapshot(),track=player.currentItem?.track,index=controller.update(player.playback.positionMs);
-    const frame={title:track?.title||'墨屿 · 桌面歌词',line:state.loading?'正在读取歌词…':failed?'歌词读取失败':state.lines[index]?.text||(state.lines.length?'等待歌词开始':'暂无歌词'),nextLine:state.lines[index+1]?.text||'',status:player.playback.status==='playing'?'播放中':player.playback.status==='paused'?'已暂停':'播放已停止'};
-    const json=JSON.stringify(frame);if(json===lastFrame)return;lastFrame=json;
+    const state=controller.snapshot(),track=player.currentItem?.track,index=controller.update(player.playback.positionMs),positionMs=Math.max(0,player.playback.positionMs-state.offsetMs);
+    const now=performance.now(),jump=Math.abs(positionMs-lastPosition)>1200||Math.abs(index-lastLine)>1;
+    if(now-lastSentAt<100&&!jump&&lastStatus===player.playback.status&&lastLine===index)return;
+    const current=state.lines[index],line=state.loading?'正在读取歌词…':failed?'歌词读取失败':current?.text||(state.lines.length?'等待歌词开始':'暂无歌词');
+    const trackKey=track?`${track.id}:${epoch}`:'';
+    const frame={title:track?.title||'墨屿 · 桌面歌词',line,nextLine:state.lines[index+1]?.text||'',status:player.playback.status==='playing'?'播放中':player.playback.status==='paused'?'已暂停':'播放已停止',trackKey,lineKey:`${trackKey}:${index}`,positionMs,playing:player.playback.status==='playing',words:current?.text===line?current?.words:undefined,jump};
+    const json=JSON.stringify(frame);if(json===lastFrame)return;lastFrame=json;lastSentAt=now;lastPosition=positionMs;lastLine=index;lastStatus=player.playback.status;
     void bridge!.publishDesktopLyrics(frame).catch(()=>{lastFrame='';desktopMusicState.error='桌面歌词未更新，请关闭浮窗后重试。';});
   }
   async function load(){
-    const ticket=++epoch,track=player.currentItem?.track;controller.clear();failed=false;lastFrame='';
+    const ticket=++epoch,track=player.currentItem?.track;controller.clear();failed=false;lastFrame='';lastSentAt=0;lastPosition=0;lastLine=-1;
     if(!desktopMusicState.state?.settings.lyricsVisible||!track){publish();return;}
     const pending=controller.load(track.id,()=>readTrackLyrics(track,bridge!),async()=>(await bridge!.getTrackLyricOffset({trackId:track.id})).offsetMs);publish();
     try{await pending;}catch{if(ticket===epoch)failed=true;}

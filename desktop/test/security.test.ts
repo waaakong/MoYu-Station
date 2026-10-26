@@ -17,6 +17,7 @@ function fakeEvent(senderId: number, mainFrame = true): IpcMainInvokeEvent {
     senderFrame: mainFrame ? frame : {}
   } as unknown as IpcMainInvokeEvent;
 }
+function credentialUrlFixture(){const url=new URL('https://github.com/waaakong/MoYu-Station');url.username='synthetic-user';url.password='synthetic-test-value';return url.href;}
 
 describe("Electron security boundaries", () => {
   it("locks down renderer web preferences", () => {
@@ -36,6 +37,9 @@ describe("Electron security boundaries", () => {
     expect(() => validateExternalUrl("http://moyustation.xyz/help")).toThrow("EXTERNAL_URL_BLOCKED");
     expect(() => validateExternalUrl("https://example.com")).toThrow("EXTERNAL_URL_BLOCKED");
     expect(() => validateExternalUrl("file:///C:/Windows/System32/calc.exe")).toThrow("EXTERNAL_URL_BLOCKED");
+  });
+  it.each([credentialUrlFixture(),'https://github.com:8443/','https://github.com/'+ 'a'.repeat(4096)])('rejects ambiguous or oversized external destination %#', value=>{
+    expect(()=>validateExternalUrl(value)).toThrow('EXTERNAL_URL_BLOCKED');
   });
 
   it("rejects unknown senders and subframes", async () => {

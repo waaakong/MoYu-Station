@@ -1,5 +1,19 @@
 import {test,expect} from '@playwright/test';
 async function local(page:any){await page.route('**/api/**',(route:any)=>route.fulfill({json:{success:true,data:null}}));await page.goto('/entertainment');await page.bringToFront();await page.getByRole('heading',{name:'休息一下',exact:true}).waitFor();}
+test('hard puzzle removes visual and accessible solution numbering and resumes 36 pieces',async({page},info)=>{
+  await local(page);await page.getByRole('button',{name:/风景拼图/}).click();
+  await page.getByRole('combobox',{name:'难度',exact:true}).click();await page.getByRole('option',{name:'困难 · 6 × 6',exact:true}).click();
+  await page.getByRole('button',{name:'开始新局',exact:true}).click();await page.getByRole('button',{name:'确认替换本局'}).click();
+  const tiles=page.locator('.puzzle-grid button');await expect(tiles).toHaveCount(36);
+  expect(await tiles.allTextContents()).toEqual(Array(36).fill(''));await expect(tiles.first()).toHaveAttribute('aria-label','第 1 行，第 1 列');
+  await tiles.first().click();await tiles.nth(1).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('studyroom-entertainment-v1:puzzle')||'null')?.moves)).toBe(1);
+  await page.reload();await page.getByRole('button',{name:/风景拼图/}).click();await expect(tiles).toHaveCount(36);
+  for(const [width,height] of [[1440,900],[1280,720],[1080,640],[390,844]]){
+    await page.setViewportSize({width:width!,height:height!});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:info.outputPath(`hard-puzzle-${width}.png`),animations:'disabled'});
+  }
+});
 test('classic entry preserves legacy tools; puzzle and 2048 resume stored rounds',async({page})=>{
   await local(page);for(const title of ['一分钟呼吸','电子木鱼','风景拼图','2048','扫雷','蜘蛛纸牌'])await expect(page.getByRole('button',{name:new RegExp(title)})).toBeVisible();
   await page.getByText('旧工具与声音（保留原存档）').click();await expect(page.getByRole('button',{name:'摸鱼翻翻牌',exact:true})).toBeVisible();

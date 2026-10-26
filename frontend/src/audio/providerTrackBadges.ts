@@ -27,10 +27,13 @@ export function candidateBadges(candidate?: ProviderTrackRef): ProviderTrackBadg
 }
 
 export function badgeDescription(badge: ProviderTrackBadge): string { return descriptions[badge]; }
+export function canVerifyCandidateRights(candidate:ProviderTrackRef):boolean {
+  return candidate.providerId==='kugou'&&!candidate.trackId.startsWith('file:')&&!candidate.badges?.includes('no-source');
+}
 export function providerAvailabilityText(candidate: ProviderTrackRef): string {
   const labels = candidateBadges(candidate).map(b => badgeLabels[b]);
   const status = candidate.isAvailable && candidate.rights === 'available'
-    ? '可尝试播放，实际权限由平台复核' : '当前不可播放；未确认的具体原因请以播放提示为准';
+    ? '可尝试播放，实际权限由平台复核' : canVerifyCandidateRights(candidate)?'点击后核对当前酷狗账号的播放权限':'当前不可播放；未确认的具体原因请以播放提示为准';
   return [...labels, status].join(' · ');
 }
 export function trackPlayLabel(track: Track): string {

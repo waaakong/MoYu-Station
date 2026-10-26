@@ -43,6 +43,7 @@ window.moyuStartupOverlay?.bindRestart(async () => {
 import {startFocusRuntime} from './focus/runtime';
 import {startActivityRuntime} from './activity/runtime';
 import {startDesktopLyrics} from './audio/lyrics/desktopLyrics';
+import {startDesktopWheel} from './audio/desktopWheel';
 import {activityState} from './activity/state';
 import {bindFocusNavigation} from './focus/navigation';
 import {startPrivateSceneRuntime} from './scenes/privateRuntime';
@@ -65,6 +66,7 @@ let sceneResizeTimer = 0;
 let stopFocusRuntime;
 let stopActivityRuntime;
 let stopDesktopLyrics;
+let stopDesktopWheel;
 let stopPrivateSceneRuntime;
 let stopInteractionMotion;
 const route = useRoute();
@@ -160,6 +162,7 @@ onMounted(async () => {
     { label: '正在恢复声音设置', run: async () => {
       playerStore.initialize();
       stopDesktopLyrics=startDesktopLyrics();
+      stopDesktopWheel=startDesktopWheel(router);
       soundStore.setLowPerformance(shellStore.preferences.lowPerformance);
       await soundStore.initialize();
     } },
@@ -225,6 +228,7 @@ onBeforeUnmount(async () => {
   stopFocusRuntime?.();
   stopActivityRuntime?.();
   stopDesktopLyrics?.();
+  stopDesktopWheel?.();
   stopPrivateSceneRuntime?.();
   stopInteractionMotion?.();
   resetDialogMotions();

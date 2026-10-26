@@ -45,6 +45,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install pinned Electron runtime with upstream checksum verification
+        run: node node_modules/electron/install.js
       - name: Validate configuration, tests and boundaries
         run: |
           $ErrorActionPreference = 'Stop'

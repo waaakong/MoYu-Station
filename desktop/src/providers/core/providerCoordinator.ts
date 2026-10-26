@@ -214,9 +214,11 @@ export class ProviderCoordinator {
     );
     // The queue is read by the main process, never accepted as an IPC argument.
     // Persisted metadata is identity only, not an enduring playback entitlement.
-    if (!target && queuedTrack?.id === request.trackId && queuedTrack.source.kind === "provider"
-      && queuedTrack.source.providerId === request.providerId && queuedTrack.source.trackId === request.providerTrackId
-      && !request.fallbackReason && !request.fromProviderId) {
+    const savedIdentity=!target && queuedTrack?.id === request.trackId && queuedTrack.source.kind === "provider"
+      && queuedTrack.source.providerId === request.providerId && queuedTrack.source.trackId === request.providerTrackId;
+    // A public Kugou catalog flag is not the current member's entitlement. Only
+    // explicit selection may trigger fresh verification; never expand fallback.
+    if ((savedIdentity || target?.providerId==='kugou') && !request.fallbackReason && !request.fromProviderId) {
       return this.run(request.providerId,"playback","playback",new AbortController().signal,async(adapter,context)=>{
         if (!adapter.trackDetails) throw new ProviderError("PROVIDER_UNAVAILABLE");
         const fresh = await adapter.trackDetails(request.providerTrackId,context);

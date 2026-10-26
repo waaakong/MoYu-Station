@@ -20,7 +20,7 @@ const fixedAllowedHosts = [
   ...extraAllowedHosts
 ];
 
-const openTunnelHosts = !isDisabled(process.env.VITE_DEV_TUNNEL)
+const openTunnelHosts = isEnabled(process.env.VITE_DEV_TUNNEL)
   || process.env.VITE_ALLOWED_HOSTS === "*"
   || isEnabled(process.env.VITE_ALLOW_ALL_HOSTS);
 

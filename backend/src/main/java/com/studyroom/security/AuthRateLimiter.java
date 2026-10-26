@@ -91,11 +91,10 @@ public class AuthRateLimiter {
   static String clientAddress(HttpServletRequest request) {
     String remote = request.getRemoteAddr();
     if (isLoopback(remote)) {
-      String forwarded = request.getHeader("X-Forwarded-For");
-      if (forwarded != null) {
-        String candidate = forwarded.split(",", 2)[0].trim();
-        if (isAddress(candidate)) return candidate;
-      }
+      // The single public nginx entry overwrites X-Real-IP. X-Forwarded-For may
+      // contain a client-supplied prefix and must never identify the rate bucket.
+      String realAddress = request.getHeader("X-Real-IP");
+      if (realAddress != null && isAddress(realAddress.trim())) return realAddress.trim();
     }
     return remote == null || remote.isBlank() ? "unknown" : remote;
   }

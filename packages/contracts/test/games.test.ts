@@ -3,6 +3,17 @@ import {newPuzzle,swapPuzzle,puzzleWon,new2048,move2048,newMines,revealMine,flag
 const id='11111111-1111-4111-8111-111111111111';
 function random(seed=7){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};}
 describe('classic rules',()=>{
+  it('preserves all puzzle sizes including 36-piece hard saves and rejects unsupported sizes',()=>{
+    for(const size of [3,4,6] as const){
+      let game=newPuzzle(size,id,random());
+      expect(game.tiles).toHaveLength(size*size);expect(new Set(game.tiles).size).toBe(size*size);
+      expect(isClassicGame(JSON.parse(JSON.stringify(game)))).toBe(true);
+      for(let i=0;i<game.tiles.length;i++)if(game.tiles[i]!==i)game=swapPuzzle(game,i,game.tiles.indexOf(i));
+      expect(puzzleWon(game)).toBe(true);expect(isClassicGame(game)).toBe(true);
+    }
+    expect(isClassicGame({...newPuzzle(3,id),size:5})).toBe(false);
+    expect(()=>newPuzzle(5 as 3,id)).toThrow('PUZZLE_SIZE_INVALID');
+  });
   it('swap puzzle is a permutation and solves without slide-only parity constraints',()=>{for(const size of [3,4] as const){let game=newPuzzle(size,id,random());expect(puzzleWon(game)).toBe(false);for(let i=0;i<game.tiles.length;i++)if(game.tiles[i]!==i)game=swapPuzzle(game,i,game.tiles.indexOf(i));expect(puzzleWon(game)).toBe(true);expect(isClassicGame(game)).toBe(true);}});
   it('2048 merges once per move and does not spawn when unchanged',()=>{const base=new2048(id,random());base.board=[2,2,2,2,...Array(12).fill(0)];base.score=0;const next=move2048(base,'left',()=>.99);expect(next.board.slice(0,4)).toEqual([4,4,0,0]);expect(next.score).toBe(8);expect(next.board.filter(Boolean)).toHaveLength(3);base.board=[2,4,8,16,...Array(12).fill(0)];expect(move2048(base,'left')).toBe(base);expect(isClassicGame(next)).toBe(true);});
   it('all mine levels protect the first neighborhood, reject flags and support chord loss/win',()=>{for(const difficulty of [0,1,2] as const){let game=newMines(difficulty,id);game=flagMine(game,0);expect(revealMine(game,0)).toBe(game);game=flagMine(game,0);game=revealMine(game,0,random());expect(game.mines).toHaveLength(MINES_LEVELS[difficulty].count);expect([0,...mineNeighbors(game,0)].some(i=>game.mines.includes(i))).toBe(false);expect(adjacentMines(game,0)).toBe(0);expect(isClassicGame(game)).toBe(true);const {width,height}=MINES_LEVELS[difficulty];for(let i=0;i<width*height;i++)if(!game.mines.includes(i))game=revealMine(game,i);expect(game.status).toBe('won');expect(isClassicGame(game)).toBe(true);}

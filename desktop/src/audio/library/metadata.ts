@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { parse, resolve } from "node:path";
-import { parseFile, selectCover } from "music-metadata";
+import {parseMetadataProcess} from './metadataProcess';
+import type {parseFile} from 'music-metadata';
 
 const MAX_COVER_BYTES = 2 * 1024 * 1024;
 const MAX_COVER_PIXELS = 16_000_000;
@@ -156,19 +157,16 @@ export async function readAudioMetadata(audioPath: string, fingerprint: string, 
   const sidecar = await readSidecarLyrics(audioPath);
   let timeout: NodeJS.Timeout | undefined;
   try {
-    const metadata = await Promise.race([
-      parseFile(audioPath, { duration: true, skipPostHeaders: true }),
-      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("METADATA_PARSE_TIMEOUT")), METADATA_TIMEOUT_MS); })
-    ]);
-    const cover = selectCover(metadata.common.picture);
+    const metadata = await parseMetadataProcess(audioPath);
+    const cover = metadata.cover;
     return {
-      title: cleanText(metadata.common.title),
-      artist: cleanText(metadata.common.artist),
-      album: cleanText(metadata.common.album),
-      durationMs: metadata.format.duration && Number.isFinite(metadata.format.duration) ? Math.round(metadata.format.duration * 1_000) : undefined,
-      artwork: cover ? await cacheArtwork(cover.data, cover.format, fingerprint, cacheDirectory) : undefined,
-      lyrics: sidecar || embeddedLyrics(metadata),
-      lyricsSource: sidecar ? "sidecar" : embeddedLyrics(metadata) ? "embedded" : undefined,
+      title: cleanText(metadata.title),
+      artist: cleanText(metadata.artist),
+      album: cleanText(metadata.album),
+      durationMs: metadata.durationMs,
+      artwork: cover ? await cacheArtwork(cover.data, cover.mime, fingerprint, cacheDirectory) : undefined,
+      lyrics: sidecar || metadata.lyrics,
+      lyricsSource: sidecar ? "sidecar" : metadata.lyrics ? "embedded" : undefined,
       parseFailed: false
     };
   } catch {

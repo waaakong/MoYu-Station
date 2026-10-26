@@ -31,6 +31,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Install pinned Electron runtime with upstream checksum verification
+        run: node node_modules/electron/install.js
       - run: npm run check:assets
       - run: npm run typecheck
       - run: npm test
