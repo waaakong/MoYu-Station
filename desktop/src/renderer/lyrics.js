@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id),reduced=matchMedia('(prefers-reduced-motion: reduce)');
 let frame=null,received=0,key='',track='',inks=[],animations=[],outgoing=null,raf=0;
 function stopMotion(){animations.forEach(a=>a.cancel());animations=[];outgoing?.remove();outgoing=null;}
+function notice(text){$('status').textContent=text;$('status').hidden=!text;}
 function paintWords(){
   if(!frame)return;
   const elapsed=frame.playing?Math.min(750,performance.now()-received):0,target=(frame.positionMs||0)+elapsed;
@@ -22,10 +23,10 @@ window.moyuLyrics.onFrame(value=>{
   }else if(value.jump)stopMotion();
   key=value.lineKey||value.line;track=value.trackKey;frame=value;received=performance.now();
   $('title').textContent=value.title;document.body.classList.toggle('locked',value.locked);$('play').textContent=value.playing?'暂停':'播放';
-  $('status').textContent=value.locked?'已锁定 · 从托盘或主窗口设置解锁':value.status;
+  notice('');
   if(value.style){document.body.style.setProperty('--font-size',value.style.fontSize+'px');document.body.style.setProperty('--highlight',value.style.highlight);$('next').hidden=value.style.rows===1;}
   cancelAnimationFrame(raf);paintWords();
 });
-for(const button of document.querySelectorAll('[data-action]'))button.addEventListener('click',()=>window.moyuLyrics.action(button.dataset.action).catch(()=>{$('status').textContent='操作未完成，请在主窗口重试。';}));
+for(const button of document.querySelectorAll('[data-action]'))button.addEventListener('click',()=>window.moyuLyrics.action(button.dataset.action).catch(()=>{notice('操作未完成，请在主窗口重试。');}));
 $('appearance').onclick=()=>{const panel=$('appearance-panel');panel.hidden=!panel.hidden;$('appearance').setAttribute('aria-expanded',String(!panel.hidden));};
 reduced.addEventListener('change',stopMotion);document.addEventListener('visibilitychange',()=>{cancelAnimationFrame(raf);if(!document.hidden)paintWords();});

@@ -7,6 +7,11 @@ test('real lyric renderer slides adjacent rows, cancels seeks and uses only supp
   await page.goto('/lyric-fixture/lyrics.html');
   const base={title:'Synthetic',line:'第一句',nextLine:'第二句',status:'已暂停',trackKey:'synthetic:1',lineKey:'synthetic:1:0',positionMs:1500,playing:false,locked:false,style:{fontSize:38,highlight:'#deefaa',rows:2}};
   await page.evaluate(frame=>(window as any).acceptLyricFrame(frame),base);await expect(page.locator('#line')).toHaveText('第一句');
+  await expect(page.locator('#status')).toBeHidden();
+  await page.evaluate(frame=>(window as any).acceptLyricFrame({...frame,playing:true,status:'播放中'}),base);
+  await expect(page.locator('#status')).toBeHidden();
+  await expect(page.getByRole('button',{name:'暂停',exact:true})).toBeAttached();
+  await page.evaluate(frame=>(window as any).acceptLyricFrame(frame),base);
   const count=await page.evaluate(frame=>{(window as any).acceptLyricFrame({...frame,line:'第二句',nextLine:'第三句',lineKey:'synthetic:1:1'});return document.getAnimations().length;},base);expect(count).toBeGreaterThanOrEqual(3);
   const afterSeek=await page.evaluate(frame=>{(window as any).acceptLyricFrame({...frame,jump:true});return document.getAnimations().filter(a=>a.playState==='running').length;},base);expect(afterSeek).toBe(0);
   await page.evaluate(frame=>(window as any).acceptLyricFrame({...frame,line:'你好',words:[{text:'你',timeMs:1000,endMs:2000},{text:'好',timeMs:2000}]}),base);
