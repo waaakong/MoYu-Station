@@ -175,7 +175,7 @@ async function createTray(): Promise<void> {
     { label: "显示墨屿自习室", click: () => windowManager?.show() },
       { label: "显示／隐藏桌面歌词", click: () => {void desktopMusic?.toggleLyrics().catch(()=>{});} },
       { label: "解锁桌面歌词", click: () => {void desktopMusic?.unlockLyrics().catch(()=>{});} },
-      { label: "找回桌面歌词位置", click: () => desktopMusic?.resetLyricsPosition() },
+      { label: "找回桌面歌词位置", click: () => {void desktopMusic?.resetLyricsPosition().catch(()=>{});} },
     { type: "separator" },
     {
       label: "退出程序",

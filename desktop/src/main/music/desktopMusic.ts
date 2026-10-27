@@ -49,16 +49,18 @@ export class DesktopMusic {
     this.updateWindow();
   }
   state():DesktopMusicState{return {settings:structuredClone(this.settings),error:this.error};}
-  toggleLyrics(){return this.save({...this.settings,lyricsVisible:!this.settings.lyricsVisible});}
+  async toggleLyrics(){const state=await this.save({...this.settings,lyricsVisible:!this.settings.lyricsVisible});if(state.settings.lyricsVisible)this.bringLyricsToMainDisplay();return state;}
   unlockLyrics(){return this.save({...this.settings,lyricsLocked:false,lyricsVisible:true});}
-  resetLyricsPosition(){if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.setBounds(this.bounds());}
+  async resetLyricsPosition(){await this.save({...this.settings,lyricsVisible:true});this.bringLyricsToMainDisplay();}
+  private bringLyricsToMainDisplay(){if(this.lyrics&&!this.lyrics.isDestroyed()&&!this.main.isDestroyed()){const area=screen.getDisplayMatching(this.main.getBounds()).workArea;this.lyrics.setBounds(this.bounds({x:area.x+(area.width-Math.min(920,area.width))/2,y:area.y+area.height-Math.min(220,area.height)-40}));this.lyrics.showInactive();}}
+  private reportLyricsError(message:string){this.error=message;if(!this.main.isDestroyed())this.main.webContents.send(IPC_CHANNELS.desktopMusicState,this.state());}
   private async save(input:DesktopMusicSettings){
     const settings=desktopMusicSettingsSchema.parse(input),previous=this.settings;
     if(this.saving)throw new Error('桌面音乐设置正在保存，请稍后重试。');this.saving=true;
     try{await this.wheelReady;await this.wheel.configure(settings.wheel);
       try{this.shortcuts.apply(settings,()=>this.store.setSetting(KEY,settings));}catch(error){await this.wheel.configure(previous.wheel!);throw error;}
       this.settings=settings;this.error=undefined;this.updateWindow();const state=this.state();if(!this.main.isDestroyed())this.main.webContents.send(IPC_CHANNELS.desktopMusicState,state);return state;
-    }finally{this.saving=false;}
+    }catch(error){this.reportLyricsError('桌面歌词或快捷键设置未完成，请在声音面板检查设置后重试。');throw error;}finally{this.saving=false;}
   }
   private bounds(saved?:Partial<Rectangle>):Rectangle{
     const displays=screen.getAllDisplays().map(display=>display.workArea),primary=screen.getPrimaryDisplay().workArea;
@@ -76,7 +78,8 @@ export class DesktopMusic {
       window.once('ready-to-show',()=>{this.sendFrame();if(this.settings.lyricsVisible)window.showInactive();});
       window.on('move',()=>{clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>{if(!window.isDestroyed())this.store.setSetting('music.lyrics-position-v1',window.getBounds());},250);});
       window.on('close',event=>{event.preventDefault();void this.save({...this.settings,lyricsVisible:false}).catch(()=>{});});
-      void window.loadFile(join(app.getAppPath(),'dist/renderer/lyrics.html')).catch(()=>{this.error='桌面歌词窗口加载失败。';window.hide();});
+      window.webContents.on('render-process-gone',()=>{if(this.lyrics!==window)return;this.lyrics=undefined;this.lyricGuard=undefined;window.destroy();this.reportLyricsError('桌面歌词显示已中断，请重新打开桌面歌词。');});
+      void window.loadFile(join(app.getAppPath(),'dist/renderer/lyrics.html')).catch(()=>{if(this.lyrics!==window||window.isDestroyed())return;this.lyrics=undefined;this.lyricGuard=undefined;window.destroy();this.reportLyricsError('桌面歌词窗口加载失败，请重新打开桌面歌词。');});
     }
     this.lyrics.setIgnoreMouseEvents(this.settings.lyricsLocked,{forward:true});this.lyrics.setMovable(!this.settings.lyricsLocked);this.lyrics.showInactive();this.sendFrame();
   }
