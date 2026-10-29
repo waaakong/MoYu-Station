@@ -15,7 +15,7 @@ describe('finite global wheel protocol',()=>{
     for(const value of ['EXEC 1 0 0','RELEASE 0 0 0','RELEASE 1 NaN 0','MOVE 1 9999999999 0','OPEN 1 0 0 extra'])expect(parseWheelMessage(value)).toBeUndefined();
   });
   it('keeps the centre as cancellation and maps eight clockwise wedges',()=>{
-    expect(wheelSlot(0,0)).toBe(-1);expect(wheelSlot(49,0)).toBe(-1);
+    expect(wheelSlot(0,0)).toBe(-1);expect(wheelSlot(49,0)).toBe(-1);expect(wheelSlot(81,0)).toBe(-1);expect(wheelSlot(82,0)).toBe(2);
     for(let slot=0;slot<8;slot++){const angle=(slot*45-90)*Math.PI/180;expect(wheelSlot(Math.cos(angle)*100,Math.sin(angle)*100)).toBe(slot);}
   });
 });

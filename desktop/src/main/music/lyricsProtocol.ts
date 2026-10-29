@@ -7,4 +7,4 @@ export const lyricsFrameSchema=z.object({
 }).strict().superRefine((frame,ctx)=>{
   if(frame.words&& (frame.words.map(w=>w.text).join('')!==frame.line||frame.words.some((w,i)=>w.endMs!==undefined&&w.endMs<w.timeMs||i>0&&w.timeMs<frame.words![i-1]!.timeMs)))ctx.addIssue({code:'custom',message:'LYRICS_TIMING_INVALID'});
 });
-export const LYRICS_ACTIONS=['close','lock','play-pause','next','previous','font-smaller','font-larger','toggle-rows','color-next'] as const;
+export const LYRICS_ACTIONS=['close','lock','settings','play-pause','next','previous','font-smaller','font-larger','toggle-rows','color-next'] as const;

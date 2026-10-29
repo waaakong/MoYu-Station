@@ -164,7 +164,7 @@ onMounted(async () => {
     { label: '正在恢复声音设置', run: async () => {
       playerStore.initialize();
       stopSharedLyrics=startSharedLyricsSession();
-      stopDesktopLyrics=startDesktopLyrics();
+      stopDesktopLyrics=startDesktopLyrics(()=>{void router.push({name:'profile',query:{module:'client-settings'}});});
       stopDesktopWheel=startDesktopWheel(router);
       soundStore.setLowPerformance(shellStore.preferences.lowPerformance);
       await soundStore.initialize();

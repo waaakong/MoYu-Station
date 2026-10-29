@@ -113,9 +113,11 @@ function isProviderStatusChangedEvent(value: unknown): value is ProviderStatusCh
 const bridge: StudyRoomDesktopBridge = Object.freeze({
   getDesktopMusic:()=>ipcRenderer.invoke(IPC_CHANNELS.desktopMusicRead),
   saveDesktopMusic:(settings:import('@studyroom/contracts').DesktopMusicSettings)=>ipcRenderer.invoke(IPC_CHANNELS.desktopMusicSave,settings),
+  setDesktopWheelRecording:(active:boolean)=>ipcRenderer.invoke(IPC_CHANNELS.desktopWheelRecording,active),
   resetDesktopLyricsPosition:()=>ipcRenderer.invoke(IPC_CHANNELS.desktopLyricsRecover),
   publishDesktopLyrics:(frame:import('@studyroom/contracts').DesktopLyricsFrame)=>ipcRenderer.invoke(IPC_CHANNELS.desktopLyricsPublish,frame),
   onDesktopMusicState:(listener:(state:import('@studyroom/contracts').DesktopMusicState)=>void)=>{const wrapped=(_event:unknown,state:import('@studyroom/contracts').DesktopMusicState)=>listener(state);ipcRenderer.on(IPC_CHANNELS.desktopMusicState,wrapped);return ()=>ipcRenderer.removeListener(IPC_CHANNELS.desktopMusicState,wrapped);},
+  onDesktopLyricsSettingsOpen:(listener:()=>void)=>{const wrapped=()=>listener();ipcRenderer.on(IPC_CHANNELS.desktopLyricsSettingsOpen,wrapped);return()=>ipcRenderer.removeListener(IPC_CHANNELS.desktopLyricsSettingsOpen,wrapped);},
   notifications: Object.freeze({
     configure: (request: import('@studyroom/contracts').NotificationContextRequest) => invoke<string | null>(IPC_CHANNELS.notificationConfigure, request),
     show: (request: import('@studyroom/contracts').MessageNotificationRequest) => invoke<import('@studyroom/contracts').MessageNotificationResult>(IPC_CHANNELS.notificationShow, request),

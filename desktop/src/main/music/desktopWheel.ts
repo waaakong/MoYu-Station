@@ -8,6 +8,8 @@ export class DesktopWheel {
   private helper?:ChildProcessWithoutNullStreams;private window?:BrowserWindow;private heartbeat?:NodeJS.Timeout;
   private settings?:DesktopWheelSettings;private active=0;private lastSequence=0;private center={x:0,y:0};private ready=false;
   private disposed=false;private pending=new Set<ChildProcessWithoutNullStreams>();private origin={x:0,y:0};private moved=false;
+  private recordingUntil=0;
+  setRecording(active:boolean){this.cancel();this.recordingUntil=active?Date.now()+30000:0;}
   private displayChanged=()=>this.cancel();
   constructor(private execute:(command:DesktopWheelCommand)=>void,private report:(message:string)=>void){screen.on('display-removed',this.displayChanged);screen.on('display-metrics-changed',this.displayChanged);}
   async configure(input:DesktopWheelSettings){
@@ -39,7 +41,7 @@ export class DesktopWheel {
   }
   private async ensureWindow(){
     if(this.window&&!this.window.isDestroyed())return;
-    const window=new BrowserWindow({width:360,height:360,show:false,frame:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,resizable:false,focusable:false,webPreferences:{preload:join(app.getAppPath(),'dist/preload/wheel.cjs'),contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,partition:'moyu-wheel-isolated'}});
+    const window=new BrowserWindow({width:480,height:480,show:false,frame:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,resizable:false,focusable:false,webPreferences:{preload:join(app.getAppPath(),'dist/preload/wheel.cjs'),contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,partition:'moyu-wheel-isolated'}});
     this.window=window;this.ready=false;window.setIgnoreMouseEvents(true);window.removeMenu();
     window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',e=>e.preventDefault());window.webContents.on('will-attach-webview',e=>e.preventDefault());
     window.webContents.session.setPermissionRequestHandler((_w,_p,done)=>done(false));window.webContents.session.setPermissionCheckHandler(()=>false);
@@ -47,13 +49,14 @@ export class DesktopWheel {
     await window.loadFile(join(app.getAppPath(),'dist/renderer/wheel.html'));this.ready=true;
   }
   private handle(line:string){
+    if(Date.now()<this.recordingUntil){this.cancel();return;}
     const event=parseWheelMessage(line);if(!event||!this.settings||!this.ready||!this.window||this.window.isDestroyed())return;
     if(event.type==='OPEN'){
       if(event.sequence<=this.lastSequence)return;this.lastSequence=event.sequence;this.active=event.sequence;
       const point=screen.screenToDipPoint({x:event.x,y:event.y}),area=screen.getDisplayNearestPoint(point).workArea;
       this.origin=point;this.moved=false;
-      const x=Math.round(Math.max(area.x,Math.min(area.x+area.width-360,point.x-180))),y=Math.round(Math.max(area.y,Math.min(area.y+area.height-360,point.y-180)));
-      this.center={x:x+180,y:y+180};this.window.setBounds({x,y,width:360,height:360});this.frame(-1);this.window.showInactive();return;
+      const x=Math.round(Math.max(area.x,Math.min(area.x+area.width-480,point.x-240))),y=Math.round(Math.max(area.y,Math.min(area.y+area.height-480,point.y-240)));
+      this.center={x:x+240,y:y+240};this.window.setBounds({x,y,width:480,height:480});this.frame(-1);this.window.showInactive();return;
     }
     if(event.sequence!==this.active)return;
     if(event.type==='CANCEL'){this.cancel();return;}

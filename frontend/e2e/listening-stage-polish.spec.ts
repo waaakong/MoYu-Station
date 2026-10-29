@@ -19,12 +19,12 @@ test('listening stage fits four viewports and restores modal and pure-mode focus
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width + 1);
     await page.screenshot({ path: info.outputPath(`listening-stage-${viewport.width}.png`), animations: 'disabled' });
     await page.getByRole('button', { name: '视觉设置', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: '视觉设置' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '舞台设置' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: '视觉设置', exact: true })).toBeFocused();
   }
-  await page.getByRole('button', { name: '歌词舞台', exact: true }).click();
-  await expect(page.getByRole('button', { name: '歌词舞台', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tab', { name: '沉浸歌词', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '沉浸歌词', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: '纯净模式', exact: true }).click();
   await expect(page.getByRole('button', { name: '显示控制', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

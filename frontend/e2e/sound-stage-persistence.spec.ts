@@ -7,17 +7,17 @@ test('stage composition, tone and view survive reopening/reload; failed storage 
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/sound'); await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
   const stage = page.getByRole('region', { name: '完整音乐视觉模式' });
-  await page.getByRole('button', { name: '封面舞台', exact: true }).focus(); await page.keyboard.press('ArrowRight');
-  await page.getByRole('button', { name: '歌词舞台', exact: true }).click();
+  await page.getByRole('tab', { name: '封面＋歌词', exact: true }).focus(); await page.keyboard.press('ArrowRight');
+  await page.getByRole('tab', { name: '沉浸歌词', exact: true }).click();
   await page.getByRole('button', { name: '视觉设置', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '视觉设置' });
+  const dialog = page.getByRole('dialog', { name: '舞台设置' });
   await dialog.getByRole('combobox', { name: '色调', exact: true }).click();
   await page.getByRole('option', { name: '月白', exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('studyroom-sound-settings-v1') || '{}').visualizer?.stage)).toEqual({ composition: 'lyrics', tone: 'moon', cameraX: 2, cameraY: 0, preferences:{version:2,layout:'lyrics',lyricStyle:'scroll',background:'cover',quality:24,intensity:.65,depth:.5} });
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: '纯净模式', exact: true }).click();
   await page.reload(); await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
   await expect(stage).toHaveClass(/listening-stage--moon/);
-  await expect(page.getByRole('button', { name: '歌词舞台', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('tab', { name: '沉浸歌词', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('button', { name: '返回声音', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '视觉设置', exact: true }).click();
   await page.evaluate(() => {
@@ -59,7 +59,7 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
     (window as any).stopSyntheticLyrics = startSharedLyricsSession();
   });
   await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
-  await page.getByRole('button', { name: '歌词舞台', exact: true }).click();
+  await page.getByRole('tab', { name: '沉浸歌词', exact: true }).click();
   await expect(page.getByText('正在读取歌词…', { exact: true })).toBeVisible();
   await page.evaluate(() => { (window as any).lyricPlayer.playback.currentItemId = 'new'; });
   await expect(page.getByRole('button', { name: '重试读取歌词' })).toBeVisible();

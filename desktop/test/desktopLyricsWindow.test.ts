@@ -1,13 +1,13 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {DEFAULT_DESKTOP_MUSIC} from '../src/main/music/shortcuts';
-const mock=vi.hoisted(()=>({windows:[] as any[],execute:undefined as undefined|((command:string)=>void),configure:vi.fn(async()=>{}),handlers:new Map<string,Function>(),load:vi.fn(async()=>{}),mediaRegister:vi.fn(()=>true)}));
+const mock=vi.hoisted(()=>({windows:[] as any[],execute:undefined as undefined|((command:string)=>void),configure:vi.fn(async()=>{}),handlers:new Map<string,Function>(),load:vi.fn(async()=>{}),recording:vi.fn(),mediaRegister:vi.fn(()=>true)}));
 vi.mock('electron',()=>({app:{getAppPath:()=>'/app'},globalShortcut:{register:mock.mediaRegister,unregister:()=>{}},ipcMain:{handle:(key:string,fn:Function)=>mock.handlers.set(key,fn),removeHandler:(key:string)=>mock.handlers.delete(key)},screen:{getAllDisplays:()=>[{workArea:{x:-1920,y:0,width:1920,height:1080}},{workArea:{x:0,y:0,width:1440,height:900}}],getDisplayMatching:()=>({workArea:{x:0,y:0,width:1440,height:900}}),getPrimaryDisplay:()=>({workArea:{x:0,y:0,width:1440,height:900}}),on:()=>{},removeListener:()=>{}},BrowserWindow:class{
   destroyed=false;events=new Map<string,Function>();bounds:any;webEvents=new Map<string,Function>();
   webContents={id:2,send:vi.fn(),setWindowOpenHandler:()=>{},on:(key:string,fn:Function)=>this.webEvents.set(key,fn),session:{setPermissionRequestHandler:()=>{},setPermissionCheckHandler:()=>{}}};
   constructor(options:any){this.bounds=options;mock.windows.push(this);}
   isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}hide=vi.fn();showInactive=vi.fn();setBounds(value:any){this.bounds=value;}getBounds(){return this.bounds;}setIgnoreMouseEvents(){}setMovable(){}removeMenu(){}once(key:string,fn:Function){this.events.set(key,fn);}on(key:string,fn:Function){this.events.set(key,fn);}loadFile(){return mock.load();}
 }}));
-vi.mock('../src/main/music/desktopWheel',()=>({DesktopWheel:class{constructor(execute:any){mock.execute=execute;}configure=mock.configure;dispose(){}}}));
+vi.mock('../src/main/music/desktopWheel',()=>({DesktopWheel:class{constructor(execute:any){mock.execute=execute;}configure=mock.configure;setRecording=mock.recording;dispose(){}}}));
 import {DesktopMusic} from '../src/main/music/desktopMusic';
 import {IPC_CHANNELS} from '@studyroom/contracts';
 describe('native desktop lyrics recovery',()=>{
@@ -20,6 +20,15 @@ describe('native desktop lyrics recovery',()=>{
     expect(mock.mediaRegister).not.toHaveBeenCalled();
     await (music as any).save({...music.state().settings,shortcutsEnabled:true});
     expect(mock.mediaRegister).not.toHaveBeenCalled();expect(music.state().settings.shortcutsEnabled).toBe(false);music.dispose();
+  });
+  it('only the main frame can temporarily suspend the wheel recorder with a boolean',async()=>{
+    const {music}=setup();const recording=mock.handlers.get(IPC_CHANNELS.desktopWheelRecording)!;
+    const frame={},sender={id:1,mainFrame:frame};
+    await expect(recording({sender,senderFrame:{}},true)).rejects.toThrow('IPC_SENDER_REJECTED');
+    await expect(recording({sender,senderFrame:frame},'true')).rejects.toThrow();
+    await recording({sender,senderFrame:frame},true);expect(mock.recording).toHaveBeenCalledWith(true);
+    await recording({sender,senderFrame:frame},false);expect(mock.recording).toHaveBeenCalledWith(false);
+    music.dispose();expect(mock.handlers.has(IPC_CHANNELS.desktopWheelRecording)).toBe(false);
   });
   it('wheel creates a real window and persists visibility',async()=>{const {music,store}=setup();mock.execute!('lyrics');await vi.waitFor(()=>expect(mock.windows).toHaveLength(1));expect(music.state().settings.lyricsVisible).toBe(true);expect(store.setSetting).toHaveBeenCalledWith('music.desktop-v1',expect.objectContaining({lyricsVisible:true}));music.dispose();});
   it('wheel persistence failure reports an error without pretending lyrics are enabled',async()=>{const {music,store,send}=setup();store.setSetting.mockImplementation(()=>{throw new Error('private database path');});mock.execute!('lyrics');await vi.waitFor(()=>expect(music.state().error).toBeTruthy());expect(music.state().settings.lyricsVisible).toBe(false);expect(mock.windows).toHaveLength(0);expect(send).toHaveBeenCalledWith(IPC_CHANNELS.desktopMusicState,expect.objectContaining({error:expect.not.stringContaining('private database path')}));music.dispose();});

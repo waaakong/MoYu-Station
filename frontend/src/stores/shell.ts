@@ -49,6 +49,7 @@ export const useShellStore = defineStore("shell", {
   state: () => ({
     drawer: null as DrawerId,
     immersive: false,
+    listeningStage:false,
     bossMode: false,
     preferences: readPreferences(),
     systemReducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,

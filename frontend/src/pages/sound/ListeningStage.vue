@@ -1,69 +1,61 @@
 <template>
-  <section ref="stage" class="listening-stage" :class="[`listening-stage--${tone}`, `listening-stage--${composition}`, { 'listening-stage--pure': pure }]" aria-label="完整音乐视觉模式" @keydown="onKeydown">
-    <div class="listening-stage__atmosphere" aria-hidden="true"></div>
-    <VisualizerCanvas class="listening-stage__visual" stage :tone="tone" :mode="visualMode" :quality="visualQuality" :suppressed="sound.lowPerformance" :style="cameraStyle" />
-    <header class="listening-stage__toolbar sr-glass" :inert="pure || undefined">
-      <button ref="returnButton" type="button" @click="$emit('close')">返回声音</button>
-      <div class="stage-segments" role="group" aria-label="舞台构图">
-        <button v-for="item in compositions" :key="item.id" type="button" :aria-pressed="composition === item.id" @click="composition = item.id">{{ item.label }}</button>
-      </div>
-      <div class="listening-stage__tools"><button ref="settingsButton" type="button" @click="openSettings">视觉设置</button><button type="button" @click="enterPure">纯净模式</button></div>
+  <section ref="stage" class="listening-stage" :class="[`listening-stage--${tone}`,`listening-stage--${composition}`,{'is-pure':pure}]" aria-label="完整音乐视觉模式" @keydown="onKeydown" @click="closeAccountOutside" @load.capture="captureCover">
+    <div class="ambient" aria-hidden="true"></div><StageBackgroundCanvas ref="backgroundCanvas" :tone="tone" :preferences="preferences" :playing="player.playback.status==='playing' && !player.buffering" :position-ms="player.playback.positionMs" :ambient-playing="sound.settings.ambientTracks.some(t=>t.status==='playing')" :reduced="shell.motionReduced||sound.lowPerformance" :pure="composition==='visual'" :cover-key="track?.id||''" @signal="signalState=$event"/><div class="grain" aria-hidden="true"></div>
+    <header class="topbar" :inert="pure||undefined">
+      <button ref="returnButton" class="brand" type="button" aria-label="返回声音" title="返回声音" @click="$emit('close')"><BrandMark class="brand-mark"/>墨屿<span class="crumb">听歌舞台</span></button>
+      <nav class="mode-switch" role="tablist" aria-label="舞台布局"><button v-for="item in compositions" :key="item.id" type="button" role="tab" :aria-selected="composition===item.id" :aria-pressed="composition===item.id" :tabindex="composition===item.id?0:-1" @click="composition=item.id" @keydown="moveMode($event)">{{ item.label }}</button></nav>
+      <div class="top-tools"><button ref="queueButton" class="icon-btn" aria-label="播放队列" title="播放队列" @click="openMotionDialog(queueDialog)"><AppIcon name="list"/></button><button ref="settingsButton" class="icon-btn" aria-label="视觉设置" title="舞台设置" @click="openSettings"><AppIcon name="settings"/></button><button class="account-btn" :aria-expanded="accountOpen" aria-label="我的" @click.stop="accountOpen=!accountOpen"><span class="account-dot">墨</span>我的<AppIcon name="chevronDown"/></button></div>
     </header>
+    <aside v-if="accountOpen" class="account-menu" aria-label="我的菜单"><button v-if="desktop" type="button" @click="openClientSettings"><AppIcon name="settings"/>客户端设置</button><button v-if="desktop" type="button" @click="toggleLyrics"><AppIcon name="music"/>显示／隐藏桌面歌词</button><button type="button" @click="$emit('close')">返回声音</button></aside>
+    <div class="stage-options" :inert="pure||undefined"><span class="option-label">歌词样式</span><AppSelect aria-label="歌词样式" :disabled="composition==='visual'" :model-value="preferences.lyricStyle" @update:model-value="setLyricStyle"><option v-for="[id,label] in STAGE_LYRICS" :key="id" :value="id">{{label}}</option></AppSelect><span class="option-label">背景</span><AppSelect aria-label="背景" :model-value="preferences.background" @update:model-value="setMode"><option v-for="[id,label] in STAGE_BACKGROUNDS" :key="id" :value="id">{{label}}</option></AppSelect></div>
+    <main class="stage" :class="{'stage--pure':pure}" :data-mode="composition" :data-style="preferences.lyricStyle" :data-background="preferences.background">
 
-    <div class="listening-stage__body" :class="{ 'is-reduced': shell.motionReduced }">
-      <div v-if="composition === 'cover'" class="listening-stage__cover" :style="cameraStyle" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="endDrag">
-        <TrackArtwork :track="track" resolve><div class="listening-stage__no-art"><BrandMark style="width:88px;height:88px" /><small>{{ track ? '暂无封面' : '等待一段声音' }}</small></div></TrackArtwork>
-      </div>
-      <div v-if="composition !== 'visual'" class="listening-stage__copy">
-        <p class="listening-stage__source">{{ track ? '正在播放' : '声音舞台' }}</p>
-        <h2>{{ track?.title || '让此刻，有自己的声音' }}</h2>
-        <p class="listening-stage__artist">{{ track?.artist || '返回声音页选择音乐，或开启环境声音。' }}</p>
-        <StageLyrics class="listening-stage__lyrics" :lyric-style="preferences.lyricStyle" :compact="composition === 'cover'" />
-      </div>
-      <p v-else class="listening-stage__visual-title">{{ track?.title || '总混音视觉' }}</p>
-    </div>
-
-    <footer class="listening-stage__footer" :inert="pure || undefined">
-      <span>{{ shell.motionReduced ? '已减少动态，保留静态舞台' : sound.lowPerformance ? '低性能模式，视觉已暂停' : '响应当前总混音；无信号时保持静止' }}</span>
-      <button type="button" @click="resetCamera">视角回正</button>
-    </footer>
-    <button v-if="pure" ref="restoreButton" class="listening-stage__restore" type="button" @click="leavePure">显示控制</button>
-
-    <dialog ref="settings" class="stage-settings sr-glass sr-glass--floating" aria-labelledby="stage-settings-title" @cancel.prevent="closeSettings" @click="closeOutside" @keydown="trapSettingsFocus">
-      <header><div><h2 id="stage-settings-title">视觉设置</h2><p>只调整视觉，不改变播放与计时。</p></div><button type="button" aria-label="关闭视觉设置" @click="closeSettings">关闭</button></header>
-      <fieldset><legend>舞台布局</legend><label>构图<AppSelect aria-label="舞台布局" v-model="composition"><option v-for="item in compositions" :key="item.id" :value="item.id">{{ item.label }}</option></AppSelect></label></fieldset>
-      <fieldset v-if="composition !== 'visual'"><legend>歌词</legend><label>文字呈现<AppSelect aria-label="歌词样式" :model-value="preferences.lyricStyle" @update:model-value="setLyricStyle"><option v-for="[id,label] in STAGE_LYRICS" :key="id" :value="id">{{ label }}</option></AppSelect></label><div class="stage-offset" aria-label="歌词同步调整"><button type="button" aria-label="歌词提前半秒" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(-500)">−0.5</button><button type="button" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(0,true)">{{ lyricsState.offsetMs===0?'同步':`${lyricsState.offsetMs>0?'+':''}${(lyricsState.offsetMs/1000).toFixed(1)}s` }}</button><button type="button" aria-label="歌词延后半秒" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(500)">+0.5</button></div><p v-if="lyricsControls.offsetError" role="alert">{{ lyricsControls.offsetError }}</p><p>只有真实逐字时间可用时逐字高亮；普通歌词按行切换。</p></fieldset>
-      <fieldset><legend>背景</legend><label>视觉效果<AppSelect aria-label="视觉效果" :model-value="preferences.background" @update:model-value="setMode"><option v-for="[id,label] in STAGE_BACKGROUNDS" :key="id" :value="id">{{ label }}</option></AppSelect></label>
-      <label>色调<AppSelect aria-label="色调" v-model="tone"><option value="sea">深海青金</option><option value="ember">余烬暖铜</option><option value="moon">月白</option></AppSelect></label>
-      </fieldset>
-      <fieldset><legend>性能</legend><label>画面质量<AppSelect aria-label="画面质量" :model-value="preferences.quality" :disabled="sound.lowPerformance" @update:model-value="setQuality"><option value="auto">自动 · 当前均衡上限</option><option :value="24">节能 · 24 fps 上限</option><option :value="40">均衡 · 40 fps 上限</option><option :value="60">精细 · 60 fps 上限</option></AppSelect></label></fieldset>
-      <p>拖动封面可微调视角；方向键同样可操作，Home 回正。色调、构图与视角保存在本机；纯净模式不跨次恢复。</p>
-      <p v-if="sound.errorCode === 'SOUND_SETTINGS_WRITE_FAILED'" role="alert">设置尚未保存，当前画面仍可使用。<button type="button" @click="sound.persist()">重试保存</button></p>
-      <p v-if="sound.settings.visualizer.mode === 'off'">视觉已关闭，音乐和播放进度不受影响。</p>
-      <button class="stage-settings__done" type="button" @click="closeSettings">完成</button>
-    </dialog>
+      <div v-if="composition!=='visual'" class="style-status">{{ STAGE_LYRICS.find(([id])=>id===preferences.lyricStyle)?.[1] }}</div>
+      <div v-if="composition==='visual'&&preferences.background==='cover'" class="visual-idle" aria-hidden="true"><TrackArtwork :track="track" resolve/></div><div class="stage-title"><div class="eyebrow">SOUND / LANDSCAPE</div><h1>{{track?.title||'等待一段声音'}}</h1><p>{{track?.artist||'从声音页选择音乐'}}</p></div>
+      <section class="stage-body listening-stage__body" :class="{'is-reduced':shell.motionReduced}">
+        <div class="album-column"><div class="art-wrap" :style="cameraStyle" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="endDrag"><TrackArtwork :track="track" resolve><div class="stage-cover-fallback"><BrandMark/><small>暂无封面</small></div></TrackArtwork><span class="art-label">STILL HERE.</span></div><div class="album-meta"><div class="eyebrow">A MOMENT OF STILLNESS</div><h1>{{track?.title||'让此刻，有自己的声音'}}</h1><p>{{track?.artist||'返回声音页选择音乐'}}<template v-if="track?.album"> / {{track.album}}</template></p><div class="meta-bottom"><span class="tag">{{sourceName}}</span><button class="heart" :disabled="!canFavorite" :aria-pressed="isFavorite" aria-label="喜欢这首音乐" @click="track&&$emit('toggleFavorite',track)"><AppIcon name="heart"/></button></div></div></div>
+        <StageLyrics :lyric-style="preferences.lyricStyle" :compact="composition==='cover'"/>
+      </section>
+      <p v-if="player.playback.status==='error'" class="stage-error" role="status">{{ failure.reason }}</p>
+      <section v-show="!pure" class="player" aria-label="播放控制"><div class="transport"><button type="button" :class="{'is-active':player.playback.shuffle}" :aria-pressed="player.playback.shuffle" aria-label="随机播放" @click="player.setShuffle(!player.playback.shuffle)"><AppIcon name="shuffle"/></button><button type="button" :disabled="!track" aria-label="上一首" @click="player.previous()"><AppIcon name="previous"/></button><button class="play" type="button" :disabled="!track||retryBlocked" :aria-label="playIntent?'暂停':'播放'" @click="player.toggle()"><AppIcon :name="playIntent?'pause':'play'"/></button><button type="button" :disabled="!track" aria-label="下一首" @click="player.next()"><AppIcon name="next"/></button><button v-if="desktop" type="button" aria-label="显示桌面歌词" @click="toggleLyrics"><AppIcon name="music"/></button><button type="button" aria-label="纯净模式" @click="enterPure"><AppIcon name="fullscreen"/></button></div><div class="progress-wrap"><span class="time">{{formatTime(player.playback.positionMs)}}</span><input class="stage-progress" type="range" min="0" :max="Math.max(1,player.playback.durationMs)" :value="player.playback.positionMs" :disabled="!track" :style="{'--fill':progress+'%'}" aria-label="播放进度" @input="seek"><span class="time">{{formatTime(player.playback.durationMs)}}</span></div><div class="player-bottom"><span class="demo-note"><span class="demo-dot"></span>{{shell.motionReduced?'已减少动态，保留静态舞台':player.buffering?'正在缓冲': signalState==='unavailable'?'当前音源不支持音频响应':signalState==='silent'?'当前无音频信号 · 静态氛围':'总混音响应 · 音乐与环境音'}}</span><div class="volume"><button type="button" :aria-label="sound.settings.musicBus.muted?'取消音乐静音':'音乐静音'" @click="sound.setMusicBus(sound.settings.musicBus.volume,!sound.settings.musicBus.muted)"><AppIcon :name="sound.settings.musicBus.muted?'mute':'volume'"/></button><input type="range" min="0" max="100" :value="Math.round(sound.settings.musicBus.volume*100)" aria-label="音乐音量" :style="{'--fill':sound.settings.musicBus.volume*100+'%'}" @input="setMusicVolume"><output>{{Math.round(sound.settings.musicBus.volume*100)}}%</output></div></div></section>
+      <button v-if="pure" ref="restoreButton" class="restore-controls" type="button" @click="leavePure">显示控制</button>
+    </main>
+    <dialog ref="settings" class="parity-drawer" aria-labelledby="stage-settings-title" @cancel.prevent="closeSettings" @click="closeOutside" @keydown="trapSettingsFocus"><header><div><small>STAGE / APPEARANCE</small><h2 id="stage-settings-title">舞台设置</h2></div><button type="button" aria-label="关闭视觉设置" @click="closeSettings">×</button></header><p>只调整视觉，不改变播放与计时。</p><label>舞台布局<AppSelect aria-label="舞台布局" v-model="composition"><option v-for="item in compositions" :key="item.id" :value="item.id">{{item.label}}</option></AppSelect></label><label v-if="composition!=='visual'">歌词样式<AppSelect aria-label="设置中的歌词样式" :model-value="preferences.lyricStyle" @update:model-value="setLyricStyle"><option v-for="[id,label] in STAGE_LYRICS" :key="id" :value="id">{{label}}</option></AppSelect></label><label>背景<AppSelect aria-label="视觉效果" :model-value="preferences.background" @update:model-value="setMode"><option v-for="[id,label] in STAGE_BACKGROUNDS" :key="id" :value="id">{{label}}</option></AppSelect></label><label>色调<AppSelect aria-label="色调" v-model="tone"><option value="sea">深海青金</option><option value="ember">余烬暖铜</option><option value="moon">月白</option></AppSelect></label><label>强度<output>{{Math.round(preferences.intensity*100)}}%</output><input type="range" min="0" max="100" :value="preferences.intensity*100" aria-label="视觉强度" @input="updateLevel('intensity',$event)"></label><label>纵深<output>{{Math.round(preferences.depth*100)}}%</output><input type="range" min="0" max="100" :value="preferences.depth*100" aria-label="视觉纵深" @input="updateLevel('depth',$event)"></label><label>画面质量<AppSelect aria-label="画面质量" :model-value="preferences.quality" @update:model-value="setQuality"><option value="auto">自动</option><option :value="24">节能 · 24 fps 上限</option><option :value="40">均衡 · 40 fps 上限</option><option :value="60">精细 · 60 fps 上限</option></AppSelect></label><div class="offset-controls" aria-label="歌词同步调整"><button :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" aria-label="歌词提前半秒" @click="changeOffset(-500)">−0.5</button><button :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(0,true)">{{lyricsState.offsetMs===0?'同步':`${lyricsState.offsetMs>0?'+':''}${(lyricsState.offsetMs/1000).toFixed(1)}s`}}</button><button :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" aria-label="歌词延后半秒" @click="changeOffset(500)">+0.5</button></div><p v-if="lyricsControls.offsetError" role="alert">{{lyricsControls.offsetError}}</p><button type="button" @click="resetCamera">视角回正</button><p v-if="sound.errorCode==='SOUND_SETTINGS_WRITE_FAILED'" role="alert">设置尚未保存，当前画面仍可使用。<button type="button" @click="sound.persist()">重试保存</button></p><button type="button" @click="closeSettings">完成</button></dialog>
+    <dialog ref="queueDialog" class="parity-drawer" aria-label="播放队列" @cancel.prevent="closeQueue"><header><h2>播放队列 · {{queue.items.length}}</h2><button type="button" aria-label="关闭播放队列" @click="closeQueue">×</button></header><PlayerQueueList :items="queue.items" :current-item-id="player.playback.currentItemId" @select="item=>player.load(item,0,true)" @remove="removeQueueItem"/><VolumeControl label="环境音" :value="sound.settings.ambientBus.volume" :muted="sound.settings.ambientBus.muted" @change="sound.setAmbientBus($event,false)" @mute="sound.setAmbientBus(sound.settings.ambientBus.volume,!sound.settings.ambientBus.muted)"/><button type="button" @click="player.setRepeat(player.playback.repeatMode==='off'?'all':player.playback.repeatMode==='all'?'one':'off')">循环：{{player.playback.repeatMode==='off'?'关闭':player.playback.repeatMode==='all'?'全部':'单曲'}}</button></dialog>
+    <dialog ref="clientDialog" class="parity-client" aria-label="客户端设置" @cancel.prevent="closeClientSettings"><button class="client-close" type="button" aria-label="关闭客户端设置" @click="closeClientSettings">×</button><ProfileClientSettingsPanel :embedded="true" @close="closeClientSettings" v-if="clientVisible"/></dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { openMotionDialog, closeMotionDialog } from '../../motion/runtime';
+import AppSelect from '../../components/controls/AppSelect.vue';
+import AppIcon from '../../components/icons/AppIcon.vue';
+import BrandMark from '../../components/icons/BrandMark.vue';
+import PlayerQueueList from '../../components/player/PlayerQueueList.vue';
+import VolumeControl from '../../components/sound/VolumeControl.vue';
+import ProfileClientSettingsPanel from '../profile/ProfileClientSettingsPanel.vue';
+import {useQueueStore} from '../../stores/queue';
+import {desktopMusicState,saveDesktopMusic} from '../../audio/lyrics/desktopLyrics';
+import {playbackFailure} from '../../audio/state/playbackFailure';
+
+import { openMotionDialog, closeMotionDialog,runMotion,type MotionHandle } from '../../motion/runtime';
 import TrackArtwork from "../../components/sound/TrackArtwork.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { VisualizerState } from '@studyroom/contracts';
+import type { Track,VisualizerState } from '@studyroom/contracts';
 import { usePlayerStore } from '../../stores/player';
 import { useSoundStore } from '../../stores/sound';
 import { useShellStore } from '../../stores/shell';
 import StageLyrics from './stage/StageLyrics.vue';
 import {sharedLyricsState as lyricsState,sharedLyricsControls as lyricsControls,saveSharedLyricsOffset} from '../../audio/lyrics/sharedLyricsRuntime';
 import {readStagePreferences,stageVisualizerMode,normalizeStagePreferences,STAGE_LYRICS,STAGE_BACKGROUNDS,type StagePreferences} from './stage/stagePreferences';
-import VisualizerCanvas from './VisualizerCanvas.vue';
+import StageBackgroundCanvas from './stage/StageBackgroundCanvas.vue';
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: [];toggleFavorite:[track:Track] }>();
+const props=withDefaults(defineProps<{favoriteTrackIds?:string[]}>(),{favoriteTrackIds:()=>[]});
 const player = usePlayerStore(), sound = useSoundStore(), shell = useShellStore();
 const stage = ref<HTMLElement>(), settings = ref<HTMLDialogElement>();
 const returnButton = ref<HTMLButtonElement>(), settingsButton = ref<HTMLButtonElement>(), restoreButton = ref<HTMLButtonElement>();
 const track = computed(() => player.currentItem?.track);
-const compositions = [{ id: 'cover', label: '封面舞台' }, { id: 'lyrics', label: '歌词舞台' }, { id: 'visual', label: '纯视觉' }] as const;
+const compositions = [{ id: 'cover', label: '封面＋歌词' }, { id: 'lyrics', label: '沉浸歌词' }, { id: 'visual', label: '纯视觉' }] as const;
 type StageSettings = NonNullable<VisualizerState['stage']>;
 const stageSettings = computed<StageSettings>(() => sound.settings.visualizer.stage ?? { composition: 'cover', tone: 'sea', cameraX: 0, cameraY: 0 });
 function updateStage(value: Partial<StageSettings>) { sound.setVisualizer({ ...sound.settings.visualizer, stage: { ...stageSettings.value, ...value } }); }
@@ -78,7 +70,8 @@ const visualQuality=computed(()=>preferences.value.quality===24?'low':preference
 const tone = computed({ get: () => stageSettings.value.tone, set: value => updateStage({ tone: value }) });
 const cameraX = computed({ get: () => stageSettings.value.cameraX, set: value => updateStage({ cameraX: value }) });
 const cameraY = computed({ get: () => stageSettings.value.cameraY, set: value => updateStage({ cameraY: value }) });
-const pure = ref(false);
+const pure = ref(false);let layoutMotion:MotionHandle|undefined;
+watch(()=>composition.value,async()=>{layoutMotion?.revert();await nextTick();if(stage.value&&!shell.motionReduced)layoutMotion=runMotion(stage.value,'stage-layout',tl=>{const body=stage.value!.querySelector('.stage-body');if(body)tl.fromTo(body,{opacity:0,y:14},{opacity:1,y:0,duration:.5,ease:'power3.out'});});});
 let drag: { id: number; x: number; y: number; originalX: number; originalY: number } | undefined;
 const cameraStyle = computed(() => ({ transform: shell.motionReduced ? 'none' : `perspective(1200px) rotateX(${cameraY.value}deg) rotateY(${cameraX.value}deg)` }));
 function resetCamera() { cameraX.value = 0; cameraY.value = 0; }
@@ -88,7 +81,7 @@ function endDrag() { drag = undefined; }
 async function enterPure() { pure.value = true; await nextTick(); restoreButton.value?.focus(); }
 async function leavePure() { pure.value = false; await nextTick(); returnButton.value?.focus(); }
 function onKeydown(event: KeyboardEvent) {
-  if (settings.value?.open) return;
+  if (settings.value?.open||queueDialog.value?.open||clientVisible.value) return;
   if (event.key === 'Escape') { event.preventDefault(); if (pure.value) void leavePure(); else emit('close'); return; }
   if ((event.target as HTMLElement).matches('input,select,textarea') || shell.motionReduced) return;
   if (event.key === 'Home') { event.preventDefault(); resetCamera(); }
@@ -98,34 +91,40 @@ function onKeydown(event: KeyboardEvent) {
 function openSettings() { openMotionDialog(settings.value); }
 function closeSettings() { closeMotionDialog(settings.value, false, () => settingsButton.value?.focus()); }
 function closeOutside(event: MouseEvent) { if (event.target !== settings.value) return; const rect = settings.value.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeSettings(); }
-function trapSettingsFocus(event: KeyboardEvent) { if (event.key !== 'Tab') return; const controls = [...settings.value!.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled)')].filter(element => element.getClientRects().length > 0); const first = controls[0], last = controls.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
+function trapSettingsFocus(event: KeyboardEvent) { if (event.key !== 'Tab') return; const controls = [...settings.value!.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled),input:not(:disabled),[tabindex="0"]')].filter(element => element.getClientRects().length > 0); const first = controls[0], last = controls.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
 function setMode(value:unknown) { updatePreferences({background:String(value) as StagePreferences['background']}); }
 async function changeOffset(delta:number,reset=false){await saveSharedLyricsOffset(delta,reset);}
 function setLyricStyle(value:unknown) { updatePreferences({lyricStyle:String(value) as StagePreferences['lyricStyle']}); }
 function setQuality(value:unknown) { updatePreferences({quality:value==='auto'?'auto':Number(value) as 24|40|60}); }
 
-onMounted(() => returnButton.value?.focus());
-onBeforeUnmount(() => { drag = undefined; closeMotionDialog(settings.value, true); });
-</script>
+onMounted(() => {shell.listeningStage=true;returnButton.value?.focus();void nextTick(()=>{const image=stage.value?.querySelector<HTMLImageElement>('.art-wrap img');if(image?.complete)backgroundCanvas.value?.setCoverImage(image);});});
+onBeforeUnmount(() => {shell.listeningStage=false;layoutMotion?.revert();drag=undefined;closeMotionDialog(settings.value,true);closeMotionDialog(queueDialog.value,true);closeMotionDialog(clientDialog.value,true);});
 
+const backgroundCanvas=ref<InstanceType<typeof StageBackgroundCanvas>>(),signalState=ref('silent');
+function captureCover(event:Event){if(event.target instanceof HTMLImageElement)backgroundCanvas.value?.setCoverImage(event.target);}
+const desktop=Boolean(window.studyRoomDesktop),queue=useQueueStore();
+const queueDialog=ref<HTMLDialogElement>(),queueButton=ref<HTMLButtonElement>(),clientDialog=ref<HTMLDialogElement>(),clientVisible=ref(false),accountOpen=ref(false);
+const sourceName=computed(()=>track.value?.source.kind==='provider'?({netease:'网易云音乐',qq:'QQ 音乐',kugou:'酷狗音乐'}[track.value.source.providerId]):track.value?.source.kind==='local'?'LOCAL MUSIC':track.value?.source.kind==='radio'?'RADIO':'MOYU SOUND');
+const isFavorite=computed(()=>!!track.value&&props.favoriteTrackIds.includes(track.value.id));
+const canFavorite=computed(()=>!!track.value&&Boolean(window.studyRoomDesktop?.setTrackFavorite));
+const playIntent=computed(()=>player.wantsPlayback||player.playback.status==='playing');
+const failure=computed(()=>playbackFailure(player.playback.errorCode));
+const retryBlocked=computed(()=>!playIntent.value&&player.playback.status==='error'&&(['login','none'].includes(failure.value.action)||player.retryNotBefore>Date.now()));
+const progress=computed(()=>Math.max(0,Math.min(100,player.playback.positionMs/Math.max(1,player.playback.durationMs)*100)));
+function formatTime(ms:number){const seconds=Math.floor(Math.max(0,ms)/1000);return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
+function seek(event:Event){player.seek(Number((event.target as HTMLInputElement).value));}
+function setMusicVolume(event:Event){sound.setMusicBus(Number((event.target as HTMLInputElement).value)/100,false);}
+function updateLevel(key:'intensity'|'depth',event:Event){updatePreferences({[key]:Number((event.target as HTMLInputElement).value)/100});}
+function moveMode(event:KeyboardEvent){if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const current=compositions.findIndex(item=>item.id===composition.value);const index=event.key==='Home'?0:event.key==='End'?2:(current+(event.key==='ArrowRight'?1:2))%3;composition.value=compositions[index]!.id;(event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('button')[index]?.focus();}
+function closeAccountOutside(event:MouseEvent){if(!(event.target as HTMLElement).closest('.account-btn,.account-menu'))accountOpen.value=false;}
+async function toggleLyrics(){accountOpen.value=false;const current=desktopMusicState.state?.settings;if(!current){shell.toast('请在客户端设置中开启桌面歌词','info');return;}await saveDesktopMusic({...current,lyricsVisible:!current.lyricsVisible});if(desktopMusicState.error)shell.toast(desktopMusicState.error,'error');}
+function closeQueue(){closeMotionDialog(queueDialog.value,false,()=>queueButton.value?.focus());}
+async function openClientSettings(){accountOpen.value=false;clientVisible.value=true;await nextTick();openMotionDialog(clientDialog.value);}
+function closeClientSettings(){closeMotionDialog(clientDialog.value,false,()=>{clientVisible.value=false;});}
+async function removeQueueItem(id:string){const at=queue.items.findIndex(item=>item.id===id),wasCurrent=id===player.playback.currentItemId,resume=player.playback.status==='playing';try{await queue.remove(id);if(wasCurrent){const item=queue.items[Math.min(Math.max(0,at),queue.items.length-1)];if(item)await player.load(item,0,resume);else player.clear();}}catch{shell.toast('未能移除队列曲目，请重试','error');}}
+
+</script>
+<style src="./stage/approvedPreview.css"></style>
 <style scoped>
-.listening-stage { position:relative; isolation:isolate; display:grid; grid-template-rows:auto minmax(0,1fr) auto; flex:1; min-height:0; overflow:hidden; border:1px solid #d8e9df1a; border-radius:var(--sr-radius-panel,20px); background:#081411; --stage-glow:#37695d; }
-.listening-stage--ember { --stage-glow:#79482e; }.listening-stage--moon { --stage-glow:#4d566b; }
-.listening-stage__atmosphere { position:absolute; inset:0; z-index:-2; pointer-events:none; background:radial-gradient(ellipse at 46% 58%,color-mix(in srgb,var(--stage-glow) 55%,transparent),transparent 70%),linear-gradient(135deg,#091511,#081011); }
-.listening-stage__visual { position:absolute; inset:0; z-index:-1; width:100%; height:100%; pointer-events:none; opacity:.75; }
-.listening-stage__toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; border:1px solid var(--sr-color-line); border-radius:var(--sr-radius-panel) var(--sr-radius-panel) 0 0; }
-.listening-stage button { min-height:44px; padding:10px 14px; border:1px solid var(--sr-color-line); border-radius:var(--sr-radius-control,12px); background:var(--sr-color-surface-raised); color:var(--sr-color-text); font:600 12px/1.4 var(--sr-font-sans); cursor:pointer; white-space:nowrap; }
-.stage-segments { display:flex; padding:3px; border:1px solid var(--sr-color-line); border-radius:15px; background:var(--sr-color-surface-raised); }.stage-segments button { border:0; background:transparent; color:var(--sr-color-text-muted); }.stage-segments button[aria-pressed=true] { background:var(--sr-color-selected); color:var(--sr-color-text); box-shadow:inset 0 1px #ffffff12; }
-.listening-stage__tools { display:flex; gap:8px; }
-.listening-stage__body { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center; gap:clamp(24px,5vw,80px); padding:clamp(20px,4vw,64px); min-height:0; overflow:auto; }
-.listening-stage__cover { width:min(100%,390px,43vh); aspect-ratio:1; justify-self:center; overflow:hidden; border:1px solid #d7e9dc30; border-radius:18px; background:#10251c; box-shadow:0 28px 70px #02090680; touch-action:none; user-select:none; cursor:grab; }.listening-stage__cover:active { cursor:grabbing; }.listening-stage__cover img { width:100%; height:100%; object-fit:cover; }.listening-stage__no-art { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:radial-gradient(circle at 40% 30%,#4a6e5466,transparent 70%); }.listening-stage__no-art span { font:64px var(--sr-font-display); color:#d5e2d588; }.listening-stage__no-art small { color:#b3c3b8; font-size:12px; }
-.listening-stage__copy { min-width:0; }.listening-stage__source { margin:0 0 14px; color:#c1d3c7; font-size:12px; }.listening-stage__copy h2 { margin:0; max-width:20em; font-size:clamp(24px,2.8vw,42px); font-weight:600; letter-spacing:-.04em; line-height:1.3; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }.listening-stage__artist { margin:14px 0 0; color:#b7cbbf; font-size:14px; line-height:1.6; }.listening-stage__lyrics { height:200px; margin-top:26px; }.listening-stage--lyrics .listening-stage__body { display:flex; justify-content:center; text-align:center; }.listening-stage--lyrics .listening-stage__copy { width:min(760px,100%); }.listening-stage--lyrics .listening-stage__copy h2 { max-width:none; font-size:22px; }.listening-stage--lyrics .listening-stage__lyrics { height:260px; margin-top:20px; }
-.listening-stage--visual .listening-stage__body { display:flex; align-items:flex-end; justify-content:center; }.listening-stage__visual-title { max-width:70ch; text-align:center; color:#c6d6cd; font-size:16px; overflow-wrap:anywhere; }
-.listening-stage__footer { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 20px; }.listening-stage__footer span { color:#adbeB3; font-size:11px; line-height:1.5; }.listening-stage--pure .listening-stage__toolbar,.listening-stage--pure .listening-stage__footer { visibility:hidden; }.listening-stage__restore { position:absolute; right:20px; bottom:16px; }
-.stage-settings { width:min(440px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:24px; overflow:auto; box-sizing:border-box; border:1px solid var(--sr-color-line-strong); border-radius:22px; color:var(--sr-color-text); }.stage-settings::backdrop { background:#020805a6; }.stage-settings header { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }.stage-settings h2 { margin:0; font-size:21px; }.stage-settings p { color:var(--sr-color-text-muted); font-size:12px; line-height:1.75; }.stage-settings label { display:grid; gap:8px; margin:18px 0; font-size:13px; }.stage-settings select { min-height:44px; padding:10px 12px; border:1px solid var(--sr-color-line); border-radius:12px; background:var(--sr-color-surface-raised); color:var(--sr-color-text); font:inherit; }.stage-settings__done { width:100%; }.listening-stage button:focus-visible,.stage-settings select:focus-visible { outline:2px solid var(--sr-color-focus,#b6d7bd); outline-offset:3px; }
-@media(hover:hover) and (pointer:fine) { .listening-stage button:hover { background:var(--sr-color-selected); } }
-@media(max-height:760px) and (min-width:801px) { .listening-stage__toolbar { padding:10px 14px; }.listening-stage__body { padding:20px 32px; }.listening-stage__lyrics { height:130px; margin-top:14px; }.listening-stage--lyrics .listening-stage__lyrics { height:190px; }.listening-stage__cover { width:min(100%,36vh); } }
-@media(max-width:800px) { .listening-stage__toolbar { flex-wrap:wrap; padding:12px; gap:8px; }.stage-segments { width:100%; order:3; }.stage-segments button { flex:1; padding-inline:8px; }.listening-stage__tools { margin-left:auto; }.listening-stage__toolbar>button,.listening-stage__tools button { padding-inline:10px; }.listening-stage__body { grid-template-columns:1fr; justify-items:center; padding:20px 18px; gap:24px; }.listening-stage__cover { width:min(240px,46vw); }.listening-stage__copy { width:100%; text-align:center; }.listening-stage__copy h2 { font-size:23px; }.listening-stage__source { margin-bottom:8px; }.listening-stage__artist { margin-top:8px; font-size:12px; }.listening-stage__lyrics { height:100px; margin-top:16px; }.listening-stage__footer { padding:10px 12px; }.listening-stage__footer span { max-width:22ch; font-size:10px; }.listening-stage--lyrics .listening-stage__lyrics { height:220px; } }
-.stage-settings fieldset{border:0;border-top:1px solid var(--sr-color-line);padding:14px 0 0;margin:20px 0}.stage-settings legend{font-size:11px;letter-spacing:1px;color:var(--sr-color-text-muted)}.stage-settings :deep(.sr-select){width:100%;min-width:0}.listening-stage__lyrics{height:clamp(200px,36vh,400px)}.listening-stage--lyrics .listening-stage__lyrics{height:clamp(260px,48vh,520px)}@media(max-width:800px){.listening-stage__lyrics{height:240px}.listening-stage--lyrics .listening-stage__lyrics{height:340px}}
-.stage-offset{display:flex;gap:8px;margin-top:14px}.stage-offset button{flex:1}
+.parity-drawer{position:absolute;inset:132px 26px auto auto;margin:0;width:320px;max-width:calc(100% - 32px);max-height:calc(100% - 150px);padding:24px;border-radius:19px;background:#26312bf2;border:1px solid #e4f0d629;color:#f0f2e9;box-shadow:0 25px 80px #0006;backdrop-filter:blur(28px);scrollbar-width:thin;overflow:auto}.parity-drawer::backdrop{background:#050c0860}.parity-drawer header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.parity-drawer h2{font-size:18px;font-weight:550;margin:0}.parity-drawer small{font-size:9px;letter-spacing:2px;color:#a6b1a7}.parity-drawer p{font-size:11px;color:#a6b1a7;line-height:1.8}.parity-drawer button{border:1px solid #e7f2d91c;border-radius:9px;padding:8px 12px}.parity-drawer label{display:grid;grid-template-columns:1fr auto;gap:9px;margin:22px 0;color:#c9d5c1;font-size:11px}.parity-drawer label :deep(.sr-select),.parity-drawer input{grid-column:1/-1;width:100%}.parity-drawer output{color:#d8e6ad}.parity-drawer .queue-list{height:330px}.offset-controls{display:flex;gap:8px}.offset-controls button{flex:1}.parity-client{padding:0;width:min(1020px,calc(100% - 48px));height:min(720px,90%);background:#202a26;border:1px solid #e4f0d629;border-radius:24px;color:#f0f2e9;overflow:auto}.parity-client :deep(.client-settings){height:100%;border:0;border-radius:0}.parity-client :deep(.settings-main){max-height:100%}.parity-client::backdrop{background:#060d0aa6;backdrop-filter:blur(14px)}.client-close{position:absolute;right:20px;top:20px;z-index:2;width:32px;height:32px;border:1px solid #e7f2d91c;border-radius:50%;font-size:22px;background:#26312b;color:inherit}.stage-cover-fallback{display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;width:100%;height:100%;min-height:140px;background:radial-gradient(ellipse at 20% 20%,#46676566,#102129);color:#a6b1a7}.stage-cover-fallback svg{width:70px;height:70px}.stage-progress{flex:1;min-width:0}.restore-controls{position:absolute;bottom:20px;right:24px;z-index:10;border:1px solid #e7f2d933;border-radius:20px;background:#26312b;color:#f0f2e9;padding:10px 18px}.is-pure .topbar,.is-pure .stage-options{visibility:hidden}.art-wrap{touch-action:none}.heart svg{width:18px}.account-btn svg{width:13px}@media(max-width:700px){.parity-drawer{top:160px;right:12px;max-height:calc(100% - 180px)}.parity-client{width:calc(100% - 24px)}}
 </style>

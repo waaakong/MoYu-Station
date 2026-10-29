@@ -9,7 +9,7 @@ export async function saveDesktopMusic(settings:DesktopMusicSettings){
   try{const state=await bridge.saveDesktopMusic(settings);desktopMusicState.state=state;return state;}catch(error){desktopMusicState.error=error instanceof Error?error.message:'桌面音乐设置未保存。';}
   finally{desktopMusicState.busy=false;}
 }
-export function startDesktopLyrics(){
+export function startDesktopLyrics(openSettings?:()=>void){
   const bridge=window.studyRoomDesktop;if(!bridge?.getDesktopMusic)return ()=>{};
   const player=usePlayerStore();
   let disposed=false,lastFrame='',lastSentAt=0,lastPosition=0,lastLine=-1,lastStatus='',lastTrack='',identityKey='',epoch=0;
@@ -27,9 +27,10 @@ export function startDesktopLyrics(){
     void bridge!.publishDesktopLyrics(frame).catch(()=>{if(disposed||lastFrame!==json)return;lastFrame='';desktopMusicState.error='桌面歌词未更新，请关闭浮窗后重试。';});
   }
   const stopSettings=bridge.onDesktopMusicState(state=>{if(!disposed)desktopMusicState.state=state;});
-  void bridge.getDesktopMusic().then(state=>{if(!disposed)desktopMusicState.state=state;}).catch(()=>{desktopMusicState.error='无法读取桌面音乐设置。';});
+  const stopSettingsOpen=bridge.onDesktopLyricsSettingsOpen?.(()=>{if(!disposed)openSettings?.();});
+  void bridge.getDesktopMusic().then(state=>{if(!disposed)desktopMusicState.state=state;}).catch(()=>{if(!disposed)desktopMusicState.error='无法读取桌面音乐设置。';});
   const stopTime=watch(()=>player.playback.positionMs,()=>publish());
   const stopPlayback=watch(()=>[player.playback.status,player.buffering],()=>publish(true));
   const stopState=watch(()=>[sharedLyricsState.lines,sharedLyricsState.currentIndex,sharedLyricsState.loading,sharedLyricsState.error,sharedLyricsState.offsetMs,sharedLyricsState.identity,desktopMusicState.state?.settings.lyricsVisible],()=>publish(true),{immediate:true});
-  return ()=>{disposed=true;stopTime();stopPlayback();stopState();stopSettings();};
+  return ()=>{disposed=true;stopTime();stopPlayback();stopState();stopSettings();stopSettingsOpen?.();};
 }

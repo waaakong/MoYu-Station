@@ -5,6 +5,7 @@
     :class="{
       'desktop-shell--compact': shell.preferences.compact,
       'desktop-shell--immersive': shell.immersive,
+      'desktop-shell--listening':shell.listeningStage,
       'sr-reduced-motion': shell.motionReduced,
       'sr-reduced-transparency': shell.transparencyReduced,
       'sr-low-performance': shell.preferences.lowPerformance
@@ -16,8 +17,8 @@
       <div class="desktop-shell__shade" />
     </div>
     <a class="desktop-shell__skip" href="#main-stage">跳到主要内容</a>
-    <AppTitlebar v-if="isDesktop && shell.immersive" floating />
-    <AppRail v-show="!shell.immersive"
+    <AppTitlebar v-if="isDesktop && (shell.immersive||shell.listeningStage)" floating />
+    <AppRail v-show="!shell.immersive&&!shell.listeningStage"
       ref="rail"
       :drawer-open="shell.drawer !== null"
       @open-drawer="openAppearance"
@@ -27,7 +28,7 @@
       <slot />
     </main>
 
-    <div v-show="route.name !== 'focus' && !shell.immersive" class="desktop-shell__player-slot"><PersistentPlayer /></div>
+    <div v-show="route.name !== 'focus' && !shell.immersive&&!shell.listeningStage" class="desktop-shell__player-slot"><PersistentPlayer /></div>
     <ContextDrawerHost :open="shell.drawer === 'appearance'" @close="closeDrawer" @closed="restoreDrawerFocus" />
     <ToastHost />
 
@@ -298,6 +299,7 @@ watch(
 @media(max-width:800px){
  .desktop-shell__player-slot{padding:6px 8px}.desktop-shell__player-slot :deep(.player){min-height:56px}
 }
+.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:44px minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.topbar){display:flex}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
 </style>
 
 <style>
@@ -310,4 +312,5 @@ watch(
 .manual-update-dialog__actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
 .manual-update-dialog__actions button{min-height:42px;padding:0 16px;border:1px solid var(--sr-color-line);border-radius:12px;background:transparent;color:inherit;font:inherit;cursor:pointer}
 .manual-update-dialog__actions .manual-update-dialog__primary{background:var(--sr-color-accent);color:var(--sr-color-accent-ink);border-color:transparent;font-weight:650}
+.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:44px minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.topbar){display:flex}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
 </style>
