@@ -65,7 +65,7 @@ return false;
 
 **Files:** `packages/contracts/src/desktopMusic.ts`、`desktop/src/main/music/shortcuts.ts`、`desktop/test/lyricsProtocol.test.ts`、`desktop/test/desktopLyricsWindow.test.ts`；新增 `desktop/test/desktopMusicMigration.test.ts`。
 
-- [ ] 扩展 `DesktopLyricsStyle`，保留已有字段，新增字段在读取旧值时填默认值：
+- [x] 扩展 `DesktopLyricsStyle`，保留已有字段，新增字段在读取旧值时填默认值：
 
 ```ts
 export interface DesktopLyricsStyle {
@@ -79,11 +79,11 @@ export interface DesktopLyricsStyle {
 }
 ```
 
-- [ ] Zod 中 highlight/base 限制为 `/^#[0-9a-fA-F]{6}$/`；base 默认 `#aab7a3`、fontFamily 默认 system、opacity 默认 .85 且范围0–1、smoothScroll 默认true。fontSize保留22–48、rows保留1或2。旧设置不因新增字段整体解析失败。
-- [ ] 增加独立存储键 `music.desktop-migration-v2`。对无法识别是否用户自定义的旧组合键一律保留；只为缺失 wheel 配置填当前默认 Ctrl＋Alt。移除构造器中无条件改写 Control＋Alt＋Space 的路径。
-- [ ] 旧 `shortcutsEnabled` 与 `shortcuts` 字段保持兼容读取，但启动和保存都不再注册独立媒体快捷键。不改内部 mediaCommand，播放器／轮盘／歌词按钮继续使用它。
-- [ ] 单测覆盖：旧最小设置能读、原色默认、非法CSS拒绝、范围边界、重启后自定义 Control＋Alt＋Space 保留、不触发 MediaPlayPause 注册。Run: `npm run test:unit --workspace study-room-desktop -- desktopMusicMigration.test.ts lyricsProtocol.test.ts desktopLyricsWindow.test.ts`；预期通过。
-- [ ] Run: `npm run typecheck --workspace @studyroom/contracts`，提交本任务文件。
+- [x] Zod 中 highlight/base 限制为 `/^#[0-9a-fA-F]{6}$/`；base 默认 `#aab7a3`、fontFamily 默认 system、opacity 默认 .85 且范围0–1、smoothScroll 默认true。fontSize保留22–48、rows保留1或2。旧设置不因新增字段整体解析失败。
+- [x] 采用无写入的兼容读取：新增字段默认化，对无法识别是否用户自定义的旧组合键一律保留；只为缺失 wheel 配置填当前默认 Ctrl＋Alt。移除构造器中无条件改写 Control＋Alt＋Space 的路径。本轮不改写旧值，因此不创建无实际迁移用途的标记。
+- [x] 旧 `shortcutsEnabled` 与 `shortcuts` 字段保持兼容读取，但启动和保存都不再注册独立媒体快捷键。不改内部 mediaCommand，播放器／轮盘／歌词按钮继续使用它。
+- [x] 单测覆盖：旧最小设置能读、原色默认、非法CSS拒绝、范围边界、重启后自定义 Control＋Alt＋Space 保留、不触发 MediaPlayPause 注册。Run: `npm run test:unit --workspace study-room-desktop -- desktopMusicMigration.test.ts lyricsProtocol.test.ts desktopLyricsWindow.test.ts`；预期通过。
+- [x] Run: `npm run typecheck --workspace @studyroom/contracts`，提交本任务文件。
 
 ## Task 3：设置保存与轮盘注册事务
 
@@ -211,4 +211,4 @@ export interface StagePreferences {
 
 - 规格1–2对应Task5–7；规格3对应Task2–4；规格4对应Task5、9；规格5对应Task2–4、8；规格6对应Task1；架构／性能与验收边界对应Task5–10。
 - 预览模拟信号、故障演示按钮、页面内浮窗不进入产品；旧账号／媒体／存档不参与公开证据。
-- Task1源码与测试已完成；Task2–10仍保持未勾选。执行方式选当前会话按顺序实施，完成阶段后更新实际状态，不额外创建线程或子代理。
+- Task1–2源码与测试已完成；Task3主进程部分已实现，前端草稿隔离仍待完成；Task4–10未执行。执行方式选当前会话按顺序实施，完成阶段后更新实际状态，不额外创建线程或子代理。
