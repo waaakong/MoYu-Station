@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 test('independent palettes preserve edits, reject invalid drafts and save valid colors',async({page})=>{
   await page.goto('/e2e/fixtures/client-settings.html');
-  await expect(page.getByRole('heading',{name:'客户端设置',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'桌面歌词',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:/^歌词高亮：/})).toHaveCount(10);
   await expect(page.getByRole('button',{name:/^歌词原色：/})).toHaveCount(10);
   await page.getByRole('button',{name:'自定义歌词高亮',exact:true}).click();

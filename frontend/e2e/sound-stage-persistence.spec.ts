@@ -8,7 +8,8 @@ test('stage composition, tone and view survive reopening/reload; failed storage 
   await page.goto('/sound'); await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
   const stage = page.getByRole('region', { name: '完整音乐视觉模式' });
   await page.getByRole('tab', { name: '封面＋歌词', exact: true }).focus(); await page.keyboard.press('ArrowRight');
-  await page.getByRole('tab', { name: '沉浸歌词', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '沉浸歌词', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: '返回声音', exact: true }).focus(); await page.keyboard.press('ArrowRight');
   await page.getByRole('button', { name: '视觉设置', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '舞台设置' });
   await dialog.getByRole('combobox', { name: '色调', exact: true }).click();
@@ -31,7 +32,7 @@ test('stage composition, tone and view survive reopening/reload; failed storage 
   await page.evaluate(() => (window as any).restoreSoundStorage());
   await dialog.getByRole('button', { name: '重试保存' }).click(); await expect(dialog.getByRole('alert')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('studyroom-sound-settings-v1')!).visualizer.stage.tone)).toBe('ember');
-  await page.keyboard.press('Escape'); await page.getByRole('button', { name: '视角回正', exact: true }).click();
+  await page.keyboard.press('Escape');await page.getByRole('button', { name: '视觉设置', exact: true }).click();await dialog.getByRole('button', { name: '视角回正', exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('studyroom-sound-settings-v1')!).visualizer.stage.cameraX)).toBe(0);
   expect(errors).toEqual([]);
 });
