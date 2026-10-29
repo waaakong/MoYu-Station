@@ -6,9 +6,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import javax.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+  private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(AccountLoggedInElsewhereException.class)
   @ResponseStatus(HttpStatus.UNAUTHORIZED)
@@ -42,8 +46,20 @@ public class GlobalExceptionHandler {
   }
 
   @ExceptionHandler(Exception.class)
-  @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-  public ApiResponse<Void> handleException(Exception exception) {
-    return ApiResponse.fail(ErrorCode.INTERNAL_ERROR, "服务暂时不可用，请稍后再试。");
+  public ResponseEntity<ApiResponse<Void>> handleException(Exception exception, HttpServletResponse response) {
+    if (ClientDisconnects.isDisconnected(exception)) {
+      log.debug("Client connection closed: {}", exception.getClass().getSimpleName());
+      return null;
+    }
+    log.error("Unhandled request failure", exception);
+    // A stream or other committed response cannot accept a second JSON body.
+    if (response.isCommitted()) return null;
+    String contentType = response.getContentType();
+    if (contentType != null && contentType.split(";", 2)[0].trim().equalsIgnoreCase("text/event-stream")) {
+      response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+      return null;
+    }
+    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .body(ApiResponse.fail(ErrorCode.INTERNAL_ERROR, "服务暂时不可用，请稍后再试。"));
   }
 }

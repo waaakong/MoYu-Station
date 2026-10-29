@@ -42,12 +42,12 @@
 - Create test: `backend/src/test/java/com/studyroom/common/ClientDisconnectsTest.java`
 - Create test: `backend/src/test/java/com/studyroom/service/AdminDashboardStreamServiceTest.java`
 
-- [ ] 添加行为用例：broken pipe／connection reset／AsyncRequestNotUsableException 可识别；业务 IOException、普通 IllegalStateException 不能笼统视为客户端取消。断开后重复 completion/error/send 不再广播，普通业务错误仍返回原 JSON。
-- [ ] 新断连分类器沿 cause 链最多16层检查，避免异常 cause 循环。使用以下有界骨架，消息匹配仅限 IOException 或实际容器断连异常类型：
+- [x] 添加行为用例：broken pipe／connection reset／AsyncRequestNotUsableException 可识别；业务 IOException、普通 IllegalStateException 不能笼统视为客户端取消。断开后重复 completion/error/send 不再广播，普通业务错误仍返回原 JSON。
+- [x] 新断连分类器沿 cause 链最多16层检查，避免异常 cause 循环。使用以下有界骨架，消息匹配仅限 IOException 或实际容器断连异常类型：
 
 ```java
 for (Throwable current = error; current != null && depth++ < 16; current = current.getCause()) {
-  if (current instanceof org.springframework.web.context.request.async.AsyncRequestNotUsableException) return true;
+  if (current.getClass().getName().equals("org.springframework.web.context.request.async.AsyncRequestNotUsableException")) return true;
   if (current instanceof java.io.IOException) {
     String message = String.valueOf(current.getMessage()).toLowerCase(java.util.Locale.ROOT);
     if (message.contains("broken pipe") || message.contains("connection reset")) return true;
@@ -56,10 +56,10 @@ for (Throwable current = error; current != null && depth++ < 16; current = curre
 return false;
 ```
 
-- [ ] 在 Spring 异常处理器中增加断连专用处理；使用响应是否 committed 和实际 SSE content type 决定不写第二个错误体。未提交的普通 HTTP 异常维持原权限／业务映射；真实 SSE 业务失败关闭连接并记录服务错误。移除会强制正常断连响应变成500的注解路径。
-- [ ] 收拢 emitter 移除／完成至幂等路径；发送先取得快照，再向仍登记的 emitter 发送。仅处理已关闭 emitter 的 IllegalStateException；其余异常不得静默丢弃。
-- [ ] Run: `mvn -f backend/pom.xml -Dtest=ClientDisconnectsTest,GlobalExceptionHandlerTest,AdminDashboardStreamServiceTest test`。预期全部通过，再跑后端完整测试。首次新增用例先确认能复现旧行为，不能只验证分类器字符串。
-- [ ] 提交本任务6个文件，提交信息 `fix(sse): handle disconnected streams without secondary JSON writes`。
+- [x] 在 Spring 异常处理器中增加断连专用处理；使用响应是否 committed 和实际 SSE content type 决定不写第二个错误体。未提交的普通 HTTP 异常维持原权限／业务映射；真实 SSE 业务失败关闭连接并记录服务错误。移除会强制正常断连响应变成500的注解路径。
+- [x] 收拢 emitter 移除／完成至幂等路径；发送先取得快照，再向仍登记的 emitter 发送。仅处理已关闭 emitter 的 IllegalStateException；其余异常不得静默丢弃。
+- [x] Run: `mvn -f backend/pom.xml -Dtest=ClientDisconnectsTest,GlobalExceptionHandlerTest,AdminDashboardStreamServiceTest test`。预期全部通过，再跑后端完整测试。首次新增用例先确认能复现旧行为，不能只验证分类器字符串。
+- [x] 提交本任务6个文件，提交信息 `fix(sse): handle disconnected streams without secondary JSON writes`。
 
 ## Task 2：设置契约与保守迁移
 
@@ -211,4 +211,4 @@ export interface StagePreferences {
 
 - 规格1–2对应Task5–7；规格3对应Task2–4；规格4对应Task5、9；规格5对应Task2–4、8；规格6对应Task1；架构／性能与验收边界对应Task5–10。
 - 预览模拟信号、故障演示按钮、页面内浮窗不进入产品；旧账号／媒体／存档不参与公开证据。
-- 仅文档已产出；Task1–10全部保持未勾选。执行方式选当前会话按顺序实施，完成阶段后更新实际状态，不额外创建线程或子代理。
+- Task1源码与测试已完成；Task2–10仍保持未勾选。执行方式选当前会话按顺序实施，完成阶段后更新实际状态，不额外创建线程或子代理。
