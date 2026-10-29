@@ -54,6 +54,9 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
       saveTrackLyricOffset: async () => undefined
     };
     (window as any).retryLyrics = () => { retry = true; };
+    const runtimePath = '/src/audio/lyrics/sharedLyricsRuntime.ts';
+    const { startSharedLyricsSession } = await import(runtimePath);
+    (window as any).stopSyntheticLyrics = startSharedLyricsSession();
   });
   await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
   await page.getByRole('button', { name: '歌词舞台', exact: true }).click();
@@ -66,5 +69,5 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
   await expect(page.locator('.lyrics-panel__lines .current')).toHaveText('当前第三秒');
   await page.getByRole('button', { name: '歌词延后半秒' }).click();
   await expect(page.getByRole('button', { name: '+0.5s', exact: true })).toBeVisible();
-  await page.evaluate(() => { delete (window as any).studyRoomDesktop; });
+  await page.evaluate(() => { (window as any).stopSyntheticLyrics(); delete (window as any).studyRoomDesktop; });
 });

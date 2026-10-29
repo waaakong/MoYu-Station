@@ -131,12 +131,12 @@ export function normalizeLyricColor(input:string):string|null {
 
 **Files:** Create `frontend/src/audio/lyrics/sharedLyricsSession.ts`、`stageClock.ts`；Modify `desktopLyrics.ts`、`pages/sound/LyricsPanel.vue`；Test `frontend/test/lyricsController.test.ts`、Create `sharedLyricsSession.test.ts`、`stageClock.test.ts`。
 
-- [ ] 保留 LyricsController 作为逐行解析／操作取消实现。共享层只建立一个正在播放会话，状态包含 track/source identity、account epoch、offset、loading/error、parsed lines；歌词面板和桌面发布器不再各自 new Controller并独立读同一首。
-- [ ] 共享会话公开 `subscribe(listener):()=>void`、`setTrack(identity,loadLyrics,loadOffset):Promise<void>`、`setPosition(positionMs):void`、`invalidate():void`、`dispose():void`；listener 接收现有 LyricsState 加 error，不直接拥有播放器控制权。单例由应用音频生命周期创建与销毁，组件取消订阅不清除其他消费者。
-- [ ] 用请求票据保护setTrack：身份或epoch改变即失效；旧loader完成不能覆盖新曲。偏移刷新只更新当前identity；account/source加入缓存键，缓存只存歌词不存凭据。
-- [ ] StageClock 的输入为 `{positionMs,playing,rate,observedAt}`；query输出以播放器观测位置为准。暂停不插值，seek及状态更新重设锚点，不把歌词偏移叠加两次。
-- [ ] 新测试先证明两个消费者只有一次loader调用、移除一个订阅后另一个正常、快速A→B旧A迟到不覆盖、账号epoch失效、暂停时钟恒定和seek立即定位。现有逐行／逐字解析测试继续通过。
-- [ ] Run: `npm run test --workspace study-room-frontend -- sharedLyricsSession.test.ts stageClock.test.ts lyricsController.test.ts trackLyricsLoader.test.ts enhancedLyrics.test.ts`。通过后提交本任务。
+- [x] 保留 LyricsController 作为逐行解析／操作取消实现。共享层只建立一个正在播放会话，状态包含 track/source identity、account epoch、offset、loading/error、parsed lines；歌词面板和桌面发布器不再各自 new Controller并独立读同一首。
+- [x] 共享会话公开 `subscribe(listener):()=>void`、`setTrack(identity,loadLyrics,loadOffset):Promise<void>`、`setPosition(positionMs):void`、`invalidate():void`、`dispose():void`；listener 接收现有 LyricsState 加 error，不直接拥有播放器控制权。单例由应用音频生命周期创建与销毁，组件取消订阅不清除其他消费者。
+- [x] 用请求票据保护setTrack：身份或epoch改变即失效；旧loader完成不能覆盖新曲。偏移刷新只更新当前identity；account/source加入缓存键，缓存只存歌词不存凭据。
+- [x] StageClock 的输入为 `{positionMs,playing,rate,observedAt}`；query输出以播放器观测位置为准。暂停不插值，seek及状态更新重设锚点，不把歌词偏移叠加两次。
+- [x] 新测试先证明两个消费者只有一次loader调用、移除一个订阅后另一个正常、快速A→B旧A迟到不覆盖、账号epoch失效、暂停时钟恒定和seek立即定位。现有逐行／逐字解析测试继续通过。
+- [x] Run: `npm run test --workspace study-room-frontend -- sharedLyricsSession.test.ts stageClock.test.ts lyricsController.test.ts trackLyricsLoader.test.ts enhancedLyrics.test.ts`。通过后提交本任务。
 
 ## Task 6：舞台偏好、三种布局和六种歌词样式
 
