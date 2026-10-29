@@ -13,7 +13,7 @@ test('stage composition, tone and view survive reopening/reload; failed storage 
   const dialog = page.getByRole('dialog', { name: '视觉设置' });
   await dialog.getByRole('combobox', { name: '色调', exact: true }).click();
   await page.getByRole('option', { name: '月白', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('studyroom-sound-settings-v1') || '{}').visualizer?.stage)).toEqual({ composition: 'lyrics', tone: 'moon', cameraX: 2, cameraY: 0 });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('studyroom-sound-settings-v1') || '{}').visualizer?.stage)).toEqual({ composition: 'lyrics', tone: 'moon', cameraX: 2, cameraY: 0, preferences:{version:2,layout:'lyrics',lyricStyle:'scroll',background:'cover',quality:24,intensity:.65,depth:.5} });
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: '纯净模式', exact: true }).click();
   await page.reload(); await page.getByRole('button', { name: '听歌舞台', exact: true }).click();
   await expect(stage).toHaveClass(/listening-stage--moon/);
@@ -64,9 +64,10 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
   await page.evaluate(() => { (window as any).lyricPlayer.playback.currentItemId = 'new'; });
   await expect(page.getByRole('button', { name: '重试读取歌词' })).toBeVisible();
   await page.evaluate(() => (window as any).retryLyrics()); await page.getByRole('button', { name: '重试读取歌词' }).click();
-  await expect(page.locator('.lyrics-panel__lines')).toContainText('已恢复歌词');
+  await expect(page.locator('.stage-lyrics__lines')).toContainText('已恢复歌词');
   await page.evaluate(() => { (window as any).rejectOldLyrics(new Error('OLD_FAILURE')); (window as any).lyricPlayer.playback.positionMs = 3500; });
-  await expect(page.locator('.lyrics-panel__lines .current')).toHaveText('当前第三秒');
+  await expect(page.locator('.stage-lyrics__lines .is-current')).toHaveText('当前第三秒');
+  await page.getByRole('button',{name:'视觉设置',exact:true}).click();
   await page.getByRole('button', { name: '歌词延后半秒' }).click();
   await expect(page.getByRole('button', { name: '+0.5s', exact: true })).toBeVisible();
   await page.evaluate(() => { (window as any).stopSyntheticLyrics(); delete (window as any).studyRoomDesktop; });

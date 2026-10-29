@@ -52,7 +52,7 @@ test('real mixed audio drives canvas; off and reduced motion clear it without st
   await page.getByRole('option', { name: '关闭', exact: true }).click();
   await expect.poll(painted).toBe(false);
   await page.getByRole('combobox', { name: '视觉效果', exact: true }).click();
-  await page.getByRole('option', { name: '星河粒子', exact: true }).click();
+  await page.getByRole('option', { name: '封面星云', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect.poll(painted).toBe(true);
   await page.screenshot({ path: info.outputPath('stage-real-mixed-particles-1440.png'), animations: 'disabled' });

@@ -124,7 +124,14 @@ export const soundSnapshotStateSchema = z.object({
       composition: z.enum(["cover", "lyrics", "visual"]),
       tone: z.enum(["sea", "ember", "moon"]),
       cameraX: z.number().finite().min(-8).max(8),
-      cameraY: z.number().finite().min(-6).max(6)
+      cameraY: z.number().finite().min(-6).max(6),
+      preferences:z.object({
+        version:z.literal(2),layout:z.enum(['cover','lyrics','visual']),
+        lyricStyle:z.enum(['scroll','focus','steps','giant','chat','story']),
+        background:z.enum(['cover','spectrum','wave','particles','off']),
+        quality:z.union([z.literal('auto'),z.literal(24),z.literal(40),z.literal(60)]),
+        intensity:z.number().finite().min(0).max(1),depth:z.number().finite().min(0).max(1)
+      }).strict().optional()
     }).strict().optional()
   })
 });

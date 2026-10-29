@@ -10,6 +10,7 @@ import type {
   VisualizerState
 } from "@studyroom/contracts";
 import { defineStore } from "pinia";
+import {normalizeStagePreferences} from '../pages/sound/stage/stagePreferences';
 import { AmbientMixer } from "../audio/ambient/ambientMixer";
 import { EQUALIZER_FREQUENCIES } from "../audio/effects/equalizerPresets";
 import { OutputDeviceManager } from "../audio/output/outputDeviceManager";
@@ -119,7 +120,8 @@ export function sanitizeSoundSettings(input: unknown, fallback = defaultSoundSet
         composition: ['cover', 'lyrics', 'visual'].includes(value.visualizer.stage.composition) ? value.visualizer.stage.composition : 'cover',
         tone: ['sea', 'ember', 'moon'].includes(value.visualizer.stage.tone) ? value.visualizer.stage.tone : 'sea',
         cameraX: clamp(value.visualizer.stage.cameraX, 0, -8, 8),
-        cameraY: clamp(value.visualizer.stage.cameraY, 0, -6, 6)
+        cameraY: clamp(value.visualizer.stage.cameraY, 0, -6, 6),
+        ...(value.visualizer.stage.preferences?{preferences:normalizeStagePreferences(value.visualizer.stage.preferences)}:{})
       } } : {})
     },
     outputDeviceId: typeof value.outputDeviceId === "string" && value.outputDeviceId.length <= 500

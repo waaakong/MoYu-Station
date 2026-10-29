@@ -90,6 +90,15 @@ describe("desktop contract entrypoint", () => {
       expect(() => soundSettingsRequestSchema.parse({ settings: { ...settings, visualizer: { ...settings.visualizer, stage: invalid } } })).toThrow();
     }
   });
+  it('persists versioned stage presentation but rejects unbounded or executable values',()=>{
+    const settings=validSoundSettings();
+    const preferences={version:2,layout:'lyrics',lyricStyle:'story',background:'wave',quality:'auto',intensity:.65,depth:.5};
+    const stage={composition:'lyrics',tone:'moon',cameraX:0,cameraY:0,preferences};
+    expect(soundSettingsRequestSchema.parse({settings:{...settings,visualizer:{...settings.visualizer,stage}}}).settings.visualizer.stage?.preferences).toEqual(preferences);
+    for(const invalid of [{...preferences,depth:2},{...preferences,lyricStyle:'script'},{...preferences,quality:120},{...preferences,url:'file:///test'}]){
+      expect(()=>soundSettingsRequestSchema.parse({settings:{...settings,visualizer:{...settings.visualizer,stage:{...stage,preferences:invalid}}}})).toThrow();
+    }
+  });
 
   it("trims bounded names and rejects invalid snapshot identifiers", () => {
     expect(playlistNameRequestSchema.parse({ name: "  Focus  " }).name).toBe("Focus");

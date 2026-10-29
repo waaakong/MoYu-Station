@@ -328,6 +328,13 @@ export interface MasterProcessingState {
 
 export type VisualizerMode = "cover" | "spectrum" | "waveform" | "particles" | "off";
 export type VisualizerQuality = "low" | "medium" | "high";
+export type StageLayout='cover'|'lyrics'|'visual';
+export type StageLyricStyle='scroll'|'focus'|'steps'|'giant'|'chat'|'story';
+export type StageBackground='cover'|'spectrum'|'wave'|'particles'|'off';
+export interface StagePreferences {
+  version:2;layout:StageLayout;lyricStyle:StageLyricStyle;background:StageBackground;
+  quality:'auto'|24|40|60;intensity:number;depth:number;
+}
 
 export interface VisualizerState {
   mode: VisualizerMode;
@@ -337,6 +344,7 @@ export interface VisualizerState {
     tone: "sea" | "ember" | "moon";
     cameraX: number;
     cameraY: number;
+    preferences?:StagePreferences;
   };
 }
 

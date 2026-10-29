@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { defaultSoundSettings, sanitizeSoundSettings } from "../src/stores/sound";
 
 describe("sound settings", () => {
+  it('keeps new stage choices through sound sanitizing and preserves old stage fields',()=>{
+    const preferences={version:2,layout:'visual',lyricStyle:'chat',background:'wave',quality:40,intensity:.4,depth:.6};
+    const settings=sanitizeSoundSettings({...defaultSoundSettings(),visualizer:{mode:'waveform',quality:'medium',stage:{composition:'visual',tone:'moon',cameraX:2,cameraY:0,preferences}}});
+    expect(settings.visualizer.stage).toEqual({composition:'visual',tone:'moon',cameraX:2,cameraY:0,preferences});
+  });
   it("keeps bounded stage preferences and accepts old records without them", () => {
     const defaults = defaultSoundSettings();
     expect(sanitizeSoundSettings(defaults).visualizer.stage).toBeUndefined();

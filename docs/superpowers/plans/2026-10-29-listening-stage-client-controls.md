@@ -142,7 +142,7 @@ export function normalizeLyricColor(input:string):string|null {
 
 **Files:** Modify `frontend/src/pages/sound/ListeningStage.vue`、`LyricsPanel.vue`；Create `frontend/src/pages/sound/stage/stagePreferences.ts`、`lyricStyles.ts`、`StageLyrics.vue`；Test `frontend/test/stagePreferences.test.ts`、`frontend/e2e/listening-stage-polish.spec.ts`、`sound-stage-persistence.spec.ts`。
 
-- [ ] 用版本化偏好定义选项，不让UI标签成为存储标识：
+- [x] 用版本化偏好定义选项，不让UI标签成为存储标识：
 
 ```ts
 export type StageLayout='cover'|'lyrics'|'visual';
@@ -155,10 +155,10 @@ export interface StagePreferences {
 }
 ```
 
-- [ ] 旧构图／视觉设置映射到新偏好，未知值回退，保留旧数据避免不可逆迁移。强度和深度限制0–1。新增测试逐个验证旧值、损坏JSON和未知枚举。
-- [ ] 三布局继续共享全局播放器和返回入口；纯视觉隐藏歌词选择但保留选择值。舞台设置按布局／歌词／背景／性能分组，保存失败保留当前预览并说明未保存。
-- [ ] StageLyrics 使用共享会话，只渲染当前行邻近窗口；样式注册表定义 scroll/focus/steps/giant/chat/story 的布局和当前行过渡。story使用track identity稳定种子和绝对时间模板，无随机每帧抖动；seek直接重算。
-- [ ] GSAP tween绑定组件context；换曲／seek杀掉旧过渡，减少动态使用当前句静态样式。真实words不存在时禁用模拟逐字wipe，设置外观示例与真实歌词区分。
+- [x] 旧构图／视觉设置映射到新偏好，未知值回退，保留旧数据避免不可逆迁移。强度和深度限制0–1。新增测试逐个验证旧值、损坏JSON和未知枚举。
+- [x] 三布局继续共享全局播放器和返回入口；纯视觉隐藏歌词选择但保留选择值。舞台设置按布局／歌词／背景／性能分组，保存失败保留当前预览并说明未保存。
+- [x] StageLyrics 使用共享会话，只渲染当前行邻近窗口；样式注册表定义 scroll/focus/steps/giant/chat/story 的布局和当前行过渡。story使用track identity稳定种子和绝对时间模板，无随机每帧抖动；seek直接重算。
+- [x] GSAP tween绑定组件context；换曲／seek杀掉旧过渡，减少动态使用当前句静态样式。真实words不存在时禁用模拟逐字wipe，设置外观示例与真实歌词区分。
 - [ ] 浏览器用例逐一选择3布局、6样式并往返，检查偏好恢复、长句不出界、返回控制可达、无歌词及错误状态；不更新历史视觉容差掩盖问题。
 - [ ] Run: `npm run test --workspace study-room-frontend -- stagePreferences.test.ts` 与前端typecheck；定向浏览器命令见Task10。通过后提交。
 

@@ -1,7 +1,7 @@
 <template>
   <section ref="stage" class="listening-stage" :class="[`listening-stage--${tone}`, `listening-stage--${composition}`, { 'listening-stage--pure': pure }]" aria-label="完整音乐视觉模式" @keydown="onKeydown">
     <div class="listening-stage__atmosphere" aria-hidden="true"></div>
-    <VisualizerCanvas class="listening-stage__visual" stage :tone="tone" :mode="sound.settings.visualizer.mode" :quality="sound.settings.visualizer.quality" :suppressed="sound.lowPerformance" :style="cameraStyle" />
+    <VisualizerCanvas class="listening-stage__visual" stage :tone="tone" :mode="visualMode" :quality="visualQuality" :suppressed="sound.lowPerformance" :style="cameraStyle" />
     <header class="listening-stage__toolbar sr-glass" :inert="pure || undefined">
       <button ref="returnButton" type="button" @click="$emit('close')">返回声音</button>
       <div class="stage-segments" role="group" aria-label="舞台构图">
@@ -18,7 +18,7 @@
         <p class="listening-stage__source">{{ track ? '正在播放' : '声音舞台' }}</p>
         <h2>{{ track?.title || '让此刻，有自己的声音' }}</h2>
         <p class="listening-stage__artist">{{ track?.artist || '返回声音页选择音乐，或开启环境声音。' }}</p>
-        <LyricsPanel class="listening-stage__lyrics" :compact="composition === 'cover'" />
+        <StageLyrics class="listening-stage__lyrics" :lyric-style="preferences.lyricStyle" :compact="composition === 'cover'" />
       </div>
       <p v-else class="listening-stage__visual-title">{{ track?.title || '总混音视觉' }}</p>
     </div>
@@ -31,9 +31,12 @@
 
     <dialog ref="settings" class="stage-settings sr-glass sr-glass--floating" aria-labelledby="stage-settings-title" @cancel.prevent="closeSettings" @click="closeOutside" @keydown="trapSettingsFocus">
       <header><div><h2 id="stage-settings-title">视觉设置</h2><p>只调整视觉，不改变播放与计时。</p></div><button type="button" aria-label="关闭视觉设置" @click="closeSettings">关闭</button></header>
-      <label>视觉效果<AppSelect aria-label="视觉效果" :value="sound.settings.visualizer.mode" @change="setMode"><option value="cover">封面微频谱</option><option value="particles">星河粒子</option><option value="spectrum">频谱地平线</option><option value="waveform">声波涟漪</option><option value="off">关闭</option></AppSelect></label>
+      <fieldset><legend>舞台布局</legend><label>构图<AppSelect aria-label="舞台布局" v-model="composition"><option v-for="item in compositions" :key="item.id" :value="item.id">{{ item.label }}</option></AppSelect></label></fieldset>
+      <fieldset v-if="composition !== 'visual'"><legend>歌词</legend><label>文字呈现<AppSelect aria-label="歌词样式" :model-value="preferences.lyricStyle" @update:model-value="setLyricStyle"><option v-for="[id,label] in STAGE_LYRICS" :key="id" :value="id">{{ label }}</option></AppSelect></label><div class="stage-offset" aria-label="歌词同步调整"><button type="button" aria-label="歌词提前半秒" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(-500)">−0.5</button><button type="button" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(0,true)">{{ lyricsState.offsetMs===0?'同步':`${lyricsState.offsetMs>0?'+':''}${(lyricsState.offsetMs/1000).toFixed(1)}s` }}</button><button type="button" aria-label="歌词延后半秒" :disabled="!lyricsState.lines.length||lyricsControls.savingOffset" @click="changeOffset(500)">+0.5</button></div><p v-if="lyricsControls.offsetError" role="alert">{{ lyricsControls.offsetError }}</p><p>只有真实逐字时间可用时逐字高亮；普通歌词按行切换。</p></fieldset>
+      <fieldset><legend>背景</legend><label>视觉效果<AppSelect aria-label="视觉效果" :model-value="preferences.background" @update:model-value="setMode"><option v-for="[id,label] in STAGE_BACKGROUNDS" :key="id" :value="id">{{ label }}</option></AppSelect></label>
       <label>色调<AppSelect aria-label="色调" v-model="tone"><option value="sea">深海青金</option><option value="ember">余烬暖铜</option><option value="moon">月白</option></AppSelect></label>
-      <label>画面质量<AppSelect aria-label="画面质量" :value="sound.settings.visualizer.quality" :disabled="sound.lowPerformance" @change="setQuality"><option value="low">节能 · 24 fps</option><option value="medium">均衡 · 40 fps</option><option value="high">精细 · 60 fps</option></AppSelect></label>
+      </fieldset>
+      <fieldset><legend>性能</legend><label>画面质量<AppSelect aria-label="画面质量" :model-value="preferences.quality" :disabled="sound.lowPerformance" @update:model-value="setQuality"><option value="auto">自动 · 当前均衡上限</option><option :value="24">节能 · 24 fps 上限</option><option :value="40">均衡 · 40 fps 上限</option><option :value="60">精细 · 60 fps 上限</option></AppSelect></label></fieldset>
       <p>拖动封面可微调视角；方向键同样可操作，Home 回正。色调、构图与视角保存在本机；纯净模式不跨次恢复。</p>
       <p v-if="sound.errorCode === 'SOUND_SETTINGS_WRITE_FAILED'" role="alert">设置尚未保存，当前画面仍可使用。<button type="button" @click="sound.persist()">重试保存</button></p>
       <p v-if="sound.settings.visualizer.mode === 'off'">视觉已关闭，音乐和播放进度不受影响。</p>
@@ -46,11 +49,13 @@
 import { openMotionDialog, closeMotionDialog } from '../../motion/runtime';
 import TrackArtwork from "../../components/sound/TrackArtwork.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { VisualizerMode, VisualizerQuality, VisualizerState } from '@studyroom/contracts';
+import type { VisualizerState } from '@studyroom/contracts';
 import { usePlayerStore } from '../../stores/player';
 import { useSoundStore } from '../../stores/sound';
 import { useShellStore } from '../../stores/shell';
-import LyricsPanel from './LyricsPanel.vue';
+import StageLyrics from './stage/StageLyrics.vue';
+import {sharedLyricsState as lyricsState,sharedLyricsControls as lyricsControls,saveSharedLyricsOffset} from '../../audio/lyrics/sharedLyricsRuntime';
+import {readStagePreferences,stageVisualizerMode,normalizeStagePreferences,STAGE_LYRICS,STAGE_BACKGROUNDS,type StagePreferences} from './stage/stagePreferences';
 import VisualizerCanvas from './VisualizerCanvas.vue';
 
 const emit = defineEmits<{ close: [] }>();
@@ -62,7 +67,14 @@ const compositions = [{ id: 'cover', label: '封面舞台' }, { id: 'lyrics', la
 type StageSettings = NonNullable<VisualizerState['stage']>;
 const stageSettings = computed<StageSettings>(() => sound.settings.visualizer.stage ?? { composition: 'cover', tone: 'sea', cameraX: 0, cameraY: 0 });
 function updateStage(value: Partial<StageSettings>) { sound.setVisualizer({ ...sound.settings.visualizer, stage: { ...stageSettings.value, ...value } }); }
-const composition = computed({ get: () => stageSettings.value.composition, set: value => updateStage({ composition: value }) });
+const preferences=computed(()=>readStagePreferences(sound.settings.visualizer));
+function updatePreferences(value:Partial<StagePreferences>){
+  const next=normalizeStagePreferences({...preferences.value,...value});
+  sound.setVisualizer({...sound.settings.visualizer,mode:stageVisualizerMode(next),quality:next.quality===24?'low':next.quality===60?'high':'medium',stage:{...stageSettings.value,composition:next.layout,preferences:next}});
+}
+const composition = computed({ get: () => preferences.value.layout, set: value => updatePreferences({layout:value}) });
+const visualMode=computed(()=>stageVisualizerMode(preferences.value));
+const visualQuality=computed(()=>preferences.value.quality===24?'low':preferences.value.quality===60?'high':'medium');
 const tone = computed({ get: () => stageSettings.value.tone, set: value => updateStage({ tone: value }) });
 const cameraX = computed({ get: () => stageSettings.value.cameraX, set: value => updateStage({ cameraX: value }) });
 const cameraY = computed({ get: () => stageSettings.value.cameraY, set: value => updateStage({ cameraY: value }) });
@@ -87,8 +99,10 @@ function openSettings() { openMotionDialog(settings.value); }
 function closeSettings() { closeMotionDialog(settings.value, false, () => settingsButton.value?.focus()); }
 function closeOutside(event: MouseEvent) { if (event.target !== settings.value) return; const rect = settings.value.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeSettings(); }
 function trapSettingsFocus(event: KeyboardEvent) { if (event.key !== 'Tab') return; const controls = [...settings.value!.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled)')].filter(element => element.getClientRects().length > 0); const first = controls[0], last = controls.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
-function setMode(event: Event) { sound.setVisualizer({ ...sound.settings.visualizer, mode: (event.target as HTMLSelectElement).value as VisualizerMode }); }
-function setQuality(event: Event) { sound.setVisualizer({ ...sound.settings.visualizer, quality: (event.target as HTMLSelectElement).value as VisualizerQuality }); }
+function setMode(value:unknown) { updatePreferences({background:String(value) as StagePreferences['background']}); }
+async function changeOffset(delta:number,reset=false){await saveSharedLyricsOffset(delta,reset);}
+function setLyricStyle(value:unknown) { updatePreferences({lyricStyle:String(value) as StagePreferences['lyricStyle']}); }
+function setQuality(value:unknown) { updatePreferences({quality:value==='auto'?'auto':Number(value) as 24|40|60}); }
 
 onMounted(() => returnButton.value?.focus());
 onBeforeUnmount(() => { drag = undefined; closeMotionDialog(settings.value, true); });
@@ -112,4 +126,6 @@ onBeforeUnmount(() => { drag = undefined; closeMotionDialog(settings.value, true
 @media(hover:hover) and (pointer:fine) { .listening-stage button:hover { background:var(--sr-color-selected); } }
 @media(max-height:760px) and (min-width:801px) { .listening-stage__toolbar { padding:10px 14px; }.listening-stage__body { padding:20px 32px; }.listening-stage__lyrics { height:130px; margin-top:14px; }.listening-stage--lyrics .listening-stage__lyrics { height:190px; }.listening-stage__cover { width:min(100%,36vh); } }
 @media(max-width:800px) { .listening-stage__toolbar { flex-wrap:wrap; padding:12px; gap:8px; }.stage-segments { width:100%; order:3; }.stage-segments button { flex:1; padding-inline:8px; }.listening-stage__tools { margin-left:auto; }.listening-stage__toolbar>button,.listening-stage__tools button { padding-inline:10px; }.listening-stage__body { grid-template-columns:1fr; justify-items:center; padding:20px 18px; gap:24px; }.listening-stage__cover { width:min(240px,46vw); }.listening-stage__copy { width:100%; text-align:center; }.listening-stage__copy h2 { font-size:23px; }.listening-stage__source { margin-bottom:8px; }.listening-stage__artist { margin-top:8px; font-size:12px; }.listening-stage__lyrics { height:100px; margin-top:16px; }.listening-stage__footer { padding:10px 12px; }.listening-stage__footer span { max-width:22ch; font-size:10px; }.listening-stage--lyrics .listening-stage__lyrics { height:220px; } }
+.stage-settings fieldset{border:0;border-top:1px solid var(--sr-color-line);padding:14px 0 0;margin:20px 0}.stage-settings legend{font-size:11px;letter-spacing:1px;color:var(--sr-color-text-muted)}.stage-settings :deep(.sr-select){width:100%;min-width:0}.listening-stage__lyrics{height:clamp(200px,36vh,400px)}.listening-stage--lyrics .listening-stage__lyrics{height:clamp(260px,48vh,520px)}@media(max-width:800px){.listening-stage__lyrics{height:240px}.listening-stage--lyrics .listening-stage__lyrics{height:340px}}
+.stage-offset{display:flex;gap:8px;margin-top:14px}.stage-offset button{flex:1}
 </style>
