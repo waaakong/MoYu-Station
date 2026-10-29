@@ -13,6 +13,7 @@
         <ProfileFeedbackPanel v-else-if="activeModule === 'feedback'" @submit="sendFeedback" />
         <ProfileSecurityPanel v-else-if="activeModule === 'security'" :required="auth.passwordChangeRequired" @change="changePassword" />
         <ProfileUpdatesPanel v-else-if="activeModule === 'client'" />
+        <ProfileClientSettingsPanel v-else-if="activeModule === 'client-settings' && desktop" />
       </section>
     </section>
   </main>
@@ -36,6 +37,7 @@ import ProfilePostsPanel from "./profile/ProfilePostsPanel.vue";
 import ProfileFeedbackPanel from "./profile/ProfileFeedbackPanel.vue";
 import ProfileSecurityPanel from "./profile/ProfileSecurityPanel.vue";
 import ProfileUpdatesPanel from "./profile/ProfileUpdatesPanel.vue";
+import ProfileClientSettingsPanel from "./profile/ProfileClientSettingsPanel.vue";
 
 const router = useRouter(); const route = useRoute(); const auth = useAuthStore(); const profile = useProfileStore();
 const scale = ref(1); const navScale = ref(1);
@@ -46,7 +48,9 @@ const cloudModules: ProfileModuleItem[] = [
   { key: "feedback", label: "反馈建议", description: "向管理员提交建议。" }, { key: "security", label: "账号安全", description: "修改密码与会话保护。" },
   { key: "client", label: "客户端版本", description: "私有更新通道状态。" }
 ];
-const moduleItems = computed(() => auth.isLoggedIn ? [localModule, ...cloudModules] : [localModule]);
+const desktop=Boolean(window.studyRoomDesktop);
+const clientSettingsModule:ProfileModuleItem={key:'client-settings',label:'客户端设置',description:'桌面歌词、颜色与快捷轮盘。'};
+const moduleItems = computed(() => [...(auth.isLoggedIn ? [localModule, ...cloudModules] : [localModule]),...(desktop?[clientSettingsModule]:[])]);
 const requested = String(route.query.module || "");
 const activeModule = ref(auth.passwordChangeRequired ? "security" : moduleItems.value.some((item) => item.key === requested) ? requested : auth.isLoggedIn ? "account" : "local");
 const navItems = computed(() => {

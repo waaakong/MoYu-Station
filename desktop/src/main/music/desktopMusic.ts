@@ -26,6 +26,7 @@ export class DesktopMusic {
     this.wheelReady=this.wheel.configure(this.settings.wheel!).catch(error=>{this.error=error instanceof Error?error.message:'轮盘不可用';});
     ipcMain.handle(IPC_CHANNELS.desktopMusicRead,event=>this.guard.invoke(IPC_CHANNELS.desktopMusicRead,event,()=>this.state()));
     ipcMain.handle(IPC_CHANNELS.desktopMusicSave,(event,value)=>this.guard.invoke(IPC_CHANNELS.desktopMusicSave,event,()=>this.save(desktopMusicSettingsSchema.parse(value))));
+    ipcMain.handle(IPC_CHANNELS.desktopLyricsRecover,event=>this.guard.invoke(IPC_CHANNELS.desktopLyricsRecover,event,()=>this.resetLyricsPosition()));
     ipcMain.handle(IPC_CHANNELS.desktopLyricsPublish,(event,value)=>this.guard.invoke(IPC_CHANNELS.desktopLyricsPublish,event,()=>{this.frame=lyricsFrameSchema.parse(value);this.sendFrame();}));
     ipcMain.handle(ACTION,(event,value)=>{
       if(!this.lyrics||!this.lyricGuard||event.sender!==this.lyrics.webContents||event.senderFrame!==event.sender.mainFrame||!LYRICS_ACTIONS.includes(value))throw new Error('LYRICS_ACTION_REJECTED');
@@ -93,5 +94,5 @@ export class DesktopMusic {
     this.lyrics.setIgnoreMouseEvents(this.settings.lyricsLocked,{forward:true});this.lyrics.setMovable(!this.settings.lyricsLocked);this.lyrics.showInactive();this.sendFrame();
   }
   private sendFrame(){if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.webContents.send(FRAME,{...this.frame,locked:this.settings.lyricsLocked,style:this.settings.lyricsStyle});}
-  dispose(){clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.lyrics?.destroy();}
+  dispose(){clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopLyricsRecover,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.lyrics?.destroy();}
 }

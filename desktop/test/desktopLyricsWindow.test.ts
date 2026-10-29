@@ -23,6 +23,15 @@ describe('native desktop lyrics recovery',()=>{
   });
   it('wheel creates a real window and persists visibility',async()=>{const {music,store}=setup();mock.execute!('lyrics');await vi.waitFor(()=>expect(mock.windows).toHaveLength(1));expect(music.state().settings.lyricsVisible).toBe(true);expect(store.setSetting).toHaveBeenCalledWith('music.desktop-v1',expect.objectContaining({lyricsVisible:true}));music.dispose();});
   it('wheel persistence failure reports an error without pretending lyrics are enabled',async()=>{const {music,store,send}=setup();store.setSetting.mockImplementation(()=>{throw new Error('private database path');});mock.execute!('lyrics');await vi.waitFor(()=>expect(music.state().error).toBeTruthy());expect(music.state().settings.lyricsVisible).toBe(false);expect(mock.windows).toHaveLength(0);expect(send).toHaveBeenCalledWith(IPC_CHANNELS.desktopMusicState,expect.objectContaining({error:expect.not.stringContaining('private database path')}));music.dispose();});
+  it('finite recovery IPC accepts only the main frame and is removed on dispose',async()=>{
+    const {music}=setup();const recover=mock.handlers.get(IPC_CHANNELS.desktopLyricsRecover)!;
+    const frame={},sender={id:1,mainFrame:frame};
+    await expect(recover({sender:{id:9,mainFrame:frame},senderFrame:frame})).rejects.toThrow('IPC_SENDER_REJECTED');
+    await expect(recover({sender,senderFrame:{}})).rejects.toThrow('IPC_SENDER_REJECTED');
+    expect(mock.windows).toHaveLength(0);await recover({sender,senderFrame:frame});
+    expect(music.state().settings.lyricsVisible).toBe(true);expect(mock.windows).toHaveLength(1);
+    music.dispose();expect(mock.handlers.has(IPC_CHANNELS.desktopLyricsRecover)).toBe(false);
+  });
   it('tray recovery creates a hidden/missing window in current screen bounds',async()=>{const {music}=setup();await music.resetLyricsPosition();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});expect(mock.windows[0].showInactive).toHaveBeenCalled();expect(music.state().settings.lyricsVisible).toBe(true);music.dispose();});
   it('wheel opening brings lyrics back from another connected display',async()=>{const {music,store}=setup();store.getSetting.mockReturnValue({x:-1486,y:602,width:920,height:220});await music.toggleLyrics();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});music.dispose();});
   it('failed renderer loads can be recreated rather than reusing a blank window',async()=>{mock.load.mockRejectedValueOnce(new Error('load failed'));const {music}=setup();await music.resetLyricsPosition();await vi.waitFor(()=>expect(mock.windows[0].destroyed).toBe(true));expect(music.state().error).toContain('加载失败');await music.resetLyricsPosition();expect(mock.windows).toHaveLength(2);expect(mock.windows[1].destroyed).toBe(false);music.dispose();});

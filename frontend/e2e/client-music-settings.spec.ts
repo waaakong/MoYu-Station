@@ -1,0 +1,30 @@
+import {test,expect} from '@playwright/test';
+test('independent palettes preserve edits, reject invalid drafts and save valid colors',async({page})=>{
+  await page.goto('/e2e/fixtures/client-settings.html');
+  await expect(page.getByRole('heading',{name:'客户端设置',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/^歌词高亮：/})).toHaveCount(10);
+  await expect(page.getByRole('button',{name:/^歌词原色：/})).toHaveCount(10);
+  await page.getByRole('button',{name:'自定义歌词高亮',exact:true}).click();
+  await page.getByRole('textbox',{name:'歌词高亮 HEX',exact:true}).fill('#123');
+  await expect(page.getByRole('textbox',{name:'歌词高亮 HEX',exact:true})).toHaveAttribute('aria-invalid','true');
+  await page.getByRole('textbox',{name:'歌词高亮 HEX',exact:true}).press('Escape');
+  await expect(page.getByRole('button',{name:'自定义歌词高亮',exact:true})).toBeFocused();
+  await page.getByRole('button',{name:'歌词高亮：暖杏',exact:true}).click();
+  await page.locator('#fixture-echo').click();
+  await page.getByRole('button',{name:'歌词原色：银灰',exact:true}).click();
+  await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await expect(page.locator('#fixture-result')).toContainText('#edc7a5 / #aab7a3');
+  await expect(page.getByRole('switch',{name:'锁定浮窗',exact:true})).toBeChecked();
+  await page.getByRole('button',{name:'歌词高亮：雾蓝',exact:true}).click();
+  await page.locator('#fixture-fail').click();await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('保存失败');
+  await expect(page.getByRole('button',{name:'歌词高亮：雾蓝',exact:true})).toHaveAttribute('aria-pressed','true');
+});
+test('wheel recorder cancels and saves a changed chord without media key controls',async({page})=>{
+  await page.goto('/e2e/fixtures/client-settings.html');
+  await page.getByRole('tab',{name:'快捷轮盘',exact:true}).click();
+  const recorder=page.getByRole('button',{name:'录制轮盘快捷键',exact:true});await recorder.click();await recorder.press('Escape');
+  await expect(recorder).toContainText('Ctrl');await recorder.click();await recorder.press('Control+Alt+k');
+  await page.getByRole('button',{name:'保存设置',exact:true}).click();await expect(page.locator('#fixture-result')).toContainText('Control+Alt+K');
+  await expect(page.getByRole('checkbox',{name:'启用全局媒体快捷键',exact:true})).toHaveCount(0);
+});

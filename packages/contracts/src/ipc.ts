@@ -117,6 +117,7 @@ export const IPC_CHANNELS = {
   mediaCommand: "media:command",
   desktopMusicRead: "desktop-music:read",
   desktopMusicSave: "desktop-music:save",
+  desktopLyricsRecover: "desktop-music:recover-lyrics",
   desktopMusicState: "desktop-music:state",
   desktopLyricsPublish: "desktop-music:lyrics",
   desktopLyricsAction: "desktop-lyrics:action",
@@ -441,6 +442,7 @@ export interface WindowCloseDecision {
 export interface StudyRoomDesktopBridge {
   getDesktopMusic():Promise<import('./desktopMusic').DesktopMusicState>;
   saveDesktopMusic(settings:import('./desktopMusic').DesktopMusicSettings):Promise<import('./desktopMusic').DesktopMusicState>;
+  resetDesktopLyricsPosition():Promise<void>;
   publishDesktopLyrics(frame:import('./desktopMusic').DesktopLyricsFrame):Promise<void>;
   onDesktopMusicState(listener:(state:import('./desktopMusic').DesktopMusicState)=>void):()=>void;
   notifications?: import('./notifications').DesktopNotificationsBridge;

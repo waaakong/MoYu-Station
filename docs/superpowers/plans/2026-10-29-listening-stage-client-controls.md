@@ -90,7 +90,7 @@ export interface DesktopLyricsStyle {
 **Files:** `desktop/src/main/music/desktopMusic.ts`、`desktopWheel.ts`、`frontend/src/audio/lyrics/desktopLyrics.ts`、`frontend/src/pages/sound/DesktopMusicControls.vue`；新增 `desktop/test/desktopMusicSave.test.ts`，扩展 `frontend/test/desktopWheel.test.ts`。
 
 - [ ] 在注册调用边界添加可注入测试替身，记录 configure／持久化调用次序。用例分别制造新键注册失败、持久化失败、重复保存、只改歌词和迟到界面回执。
-- [ ] 用稳定字段比较判定 wheel 是否变化，不依赖对象引用：
+- [x] 用稳定字段比较判定 wheel 是否变化，不依赖对象引用：
 
 ```ts
 const wheelChanged = previous.wheel?.enabled !== settings.wheel?.enabled
@@ -99,8 +99,8 @@ const wheelChanged = previous.wheel?.enabled !== settings.wheel?.enabled
   || JSON.stringify(previous.wheel?.slots) !== JSON.stringify(settings.wheel?.slots);
 ```
 
-- [ ] 仅 wheelChanged 时 configure；成功后持久化，再发布新状态。注册或持久化失败恢复旧配置、返回具体中文原因；恢复失败单独报告，不谎称旧键仍工作。歌词样式保存不重启 hook。
-- [ ] 设置页草稿在读取完成后初始化；本地 dirty 时普通状态回执不覆盖草稿；保存按钮 pending 时禁用。收到本次保存成功才更新已保存基线，失败保留用户编辑。
+- [x] 仅 wheelChanged 时 configure；成功后持久化，再发布新状态。注册或持久化失败恢复旧配置、返回具体中文原因；恢复失败单独报告，不谎称旧键仍工作。歌词样式保存不重启 hook。
+- [x] 设置页草稿在读取完成后初始化；本地 dirty 时普通状态回执不覆盖草稿；保存按钮 pending 时禁用。收到本次保存成功才更新已保存基线，失败保留用户编辑。
 - [ ] Run: `npm run test:unit --workspace study-room-desktop -- desktopMusicSave.test.ts wheelProtocol.test.ts`；`npm run test --workspace study-room-frontend -- desktopWheel.test.ts`。预期只改歌词 configure 为0次，注册失败不写新配置。
 - [ ] 提交本任务文件，保持main可构建。
 
@@ -108,9 +108,9 @@ const wheelChanged = previous.wheel?.enabled !== settings.wheel?.enabled
 
 **Files:** Create `frontend/src/pages/profile/ProfileClientSettingsPanel.vue`、`frontend/src/components/controls/LyricColorPicker.vue`、`frontend/src/utils/lyricColor.ts`；Modify `ProfilePage.vue`、`profile/ProfileSidebar.vue`、`sound/DesktopMusicControls.vue`；Create `frontend/test/lyricColor.test.ts`、`frontend/e2e/client-music-settings.spec.ts`。
 
-- [ ] 新页面复用当前 profile 模块选择方式，模块键 `client-settings`，只在 desktop bridge 存在时展示。声音页删除旧完整表单，保留“打开客户端设置”链接。未登录本地用户可调本机设置，不增加云端权限要求。
-- [ ] 分为桌面歌词／快捷轮盘两类；字段逐一绑定 Task2 契约。保留显示、锁定、找回、字体、字号、行数、平滑上滑、不透明度、wheel enabled／allowFullscreen／slots／accelerator。
-- [ ] 创建颜色规范化函数并先写边界测试：
+- [x] 新页面复用当前 profile 模块选择方式，模块键 `client-settings`，只在 desktop bridge 存在时展示。声音页删除旧完整表单，保留“打开客户端设置”链接。未登录本地用户可调本机设置，不增加云端权限要求。
+- [x] 分为桌面歌词／快捷轮盘两类；字段逐一绑定 Task2 契约。保留显示、锁定、找回、字体、字号、行数、平滑上滑、不透明度、wheel enabled／allowFullscreen／slots／accelerator。
+- [x] 创建颜色规范化函数并先写边界测试：
 
 ```ts
 export function normalizeLyricColor(input:string):string|null {
@@ -119,11 +119,13 @@ export function normalizeLyricColor(input:string):string|null {
 }
 ```
 
-- [ ] 两行色板按确认的10种预设＋彩色按钮排列；原色紧随高亮色。LyricColorPicker 使用 props `modelValue:string`、`label:string`，emit `update:modelValue`，只发有效标准色；HEX草稿与有效值分离。
+- [x] 两行色板按确认的10种预设＋彩色按钮排列；原色紧随高亮色。LyricColorPicker 使用 props `modelValue:string`、`label:string`，emit `update:modelValue`，只发有效标准色；HEX草稿与有效值分离。
 - [ ] 调色盘采用二维选色、色相／饱和度／明度条、HEX和完成按钮；pointer capture保证拖动，滑条支持键盘。Esc／外部点击关闭并丢弃无效HEX草稿，焦点回到彩色按钮，不触发外层页面关闭。
 - [ ] 复用 AppSelect 及既有 GSAP 生命周期模式；下拉框与调色盘使用统一层级管理，减少动态时不位移。录制展示组合键、Esc恢复原键、保存反馈与真实主进程结果绑定；产品中不加入模拟故障按钮。
 - [ ] Run: `npm run test --workspace study-room-frontend -- lyricColor.test.ts`。浏览器用例检查两行各10色、独立更新、保存失败保留、弹层焦点与Esc、非法草稿关闭不阻塞保存、网页无桌面入口。样式采用已确认预览人工对照，不新增无价值组件快照测试。
 - [ ] 提交组件、工具和相关测试。
+
+> 2026-10-29：Task3/4实现和本地回归详见验证记录；原生录制互斥及完整浏览器CI仍未验收，因此相关步骤不勾选。
 
 ## Task 5：共享歌词会话与真实舞台时钟
 

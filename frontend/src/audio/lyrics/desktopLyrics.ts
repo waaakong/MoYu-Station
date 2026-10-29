@@ -8,7 +8,7 @@ export const desktopMusicState=reactive<{state:DesktopMusicState|null;error:stri
 export async function saveDesktopMusic(settings:DesktopMusicSettings){
   const bridge=window.studyRoomDesktop;if(!bridge?.saveDesktopMusic||desktopMusicState.busy)return;
   desktopMusicState.busy=true;desktopMusicState.error='';
-  try{desktopMusicState.state=await bridge.saveDesktopMusic(settings);}catch(error){desktopMusicState.error=error instanceof Error?error.message:'桌面音乐设置未保存。';}
+  try{const state=await bridge.saveDesktopMusic(settings);desktopMusicState.state=state;return state;}catch(error){desktopMusicState.error=error instanceof Error?error.message:'桌面音乐设置未保存。';}
   finally{desktopMusicState.busy=false;}
 }
 export function startDesktopLyrics(){

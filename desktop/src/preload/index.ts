@@ -113,6 +113,7 @@ function isProviderStatusChangedEvent(value: unknown): value is ProviderStatusCh
 const bridge: StudyRoomDesktopBridge = Object.freeze({
   getDesktopMusic:()=>ipcRenderer.invoke(IPC_CHANNELS.desktopMusicRead),
   saveDesktopMusic:(settings:import('@studyroom/contracts').DesktopMusicSettings)=>ipcRenderer.invoke(IPC_CHANNELS.desktopMusicSave,settings),
+  resetDesktopLyricsPosition:()=>ipcRenderer.invoke(IPC_CHANNELS.desktopLyricsRecover),
   publishDesktopLyrics:(frame:import('@studyroom/contracts').DesktopLyricsFrame)=>ipcRenderer.invoke(IPC_CHANNELS.desktopLyricsPublish,frame),
   onDesktopMusicState:(listener:(state:import('@studyroom/contracts').DesktopMusicState)=>void)=>{const wrapped=(_event:unknown,state:import('@studyroom/contracts').DesktopMusicState)=>listener(state);ipcRenderer.on(IPC_CHANNELS.desktopMusicState,wrapped);return ()=>ipcRenderer.removeListener(IPC_CHANNELS.desktopMusicState,wrapped);},
   notifications: Object.freeze({
