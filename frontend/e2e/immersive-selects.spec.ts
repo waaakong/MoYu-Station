@@ -22,7 +22,7 @@ test('minute select: real options, numeric model, keyboard, focus and four viewp
 test('select inside modal consumes first Escape, reduced motion stops animation',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/sound');
   await page.getByRole('button',{name:'听歌舞台',exact:true}).click();await page.getByRole('button',{name:'视觉设置',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'视觉设置'}),select=page.getByRole('combobox',{name:'色调',exact:true});
+  const dialog=page.getByRole('dialog',{name:'舞台设置'}),select=page.getByRole('combobox',{name:'色调',exact:true});
   await select.click();await expect(page.getByRole('listbox',{name:'色调',exact:true})).toHaveCSS('animation-name','none');
   await page.keyboard.press('Escape');await expect(dialog).toBeVisible();await expect(select).toBeFocused();await page.keyboard.press('Escape');await expect(dialog).toBeHidden();
 });
