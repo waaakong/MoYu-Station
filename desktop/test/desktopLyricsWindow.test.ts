@@ -12,7 +12,34 @@ import {DesktopMusic} from '../src/main/music/desktopMusic';
 import {IPC_CHANNELS} from '@studyroom/contracts';
 describe('native desktop lyrics recovery',()=>{
   beforeEach(()=>{mock.windows=[];mock.handlers.clear();mock.mediaRegister.mockClear();mock.configure.mockReset().mockResolvedValue(undefined);mock.load.mockReset().mockResolvedValue(undefined);});
-  function setup(saved?:unknown){const send=vi.fn(),store={getSetting:vi.fn((key:string):unknown=>key==='music.desktop-v1'?saved:undefined),setSetting:vi.fn()},events=new Map<string,Function>(),main={events,on:(name:string,fn:Function)=>events.set(name,fn),removeListener:(name:string)=>events.delete(name),focus:vi.fn(),webContents:{id:1,send,on:()=>{}},isDestroyed:()=>false,getBounds:()=>({x:0,y:0,width:1440,height:900})};return {music:new DesktopMusic(main as any,store as any),send,store,main};}
+  function setup(saved?:unknown){const send=vi.fn(),store={getSetting:vi.fn((key:string):unknown=>key==='music.desktop-v1'?saved:undefined),setSetting:vi.fn()},events=new Map<string,Function>(),main={events,on:(name:string,fn:Function)=>events.set(name,fn),removeListener:(name:string)=>events.delete(name),focus:vi.fn(),moveTop:vi.fn(),show:vi.fn(),restore:vi.fn(),isMinimized:vi.fn(()=>false),isVisible:vi.fn(()=>true),isFocused:vi.fn(()=>true),webContents:{id:1,send,focus:vi.fn(),on:()=>{}},isDestroyed:vi.fn(()=>false),getBounds:()=>({x:0,y:0,width:1440,height:900})};return {music:new DesktopMusic(main as any,store as any),send,store,main};}
+  it.each(['sound','space','focus'])('wheel %s restores and raises the main window and focuses its page',async command=>{
+    const {music,main,send}=setup();main.isMinimized.mockReturnValueOnce(true);
+    mock.execute!(command);
+    expect(main.restore).toHaveBeenCalledOnce();expect(main.show).toHaveBeenCalledOnce();
+    expect(main.moveTop).toHaveBeenCalledOnce();expect(main.focus).toHaveBeenCalledOnce();expect(main.webContents.focus).toHaveBeenCalledOnce();
+    expect(main.show.mock.invocationCallOrder[0]).toBeLessThan(main.moveTop.mock.invocationCallOrder[0]);
+    expect(main.focus.mock.invocationCallOrder[0]).toBeLessThan(main.webContents.focus.mock.invocationCallOrder[0]);
+    expect(send).toHaveBeenCalledWith(IPC_CHANNELS.desktopWheelCommand,command);music.dispose();
+  });
+  it.each(['play-pause','next','previous','mute'])('wheel %s keeps background playback controls from stealing focus',command=>{
+    const {music,main}=setup();mock.execute!(command);
+    expect(main.show).not.toHaveBeenCalled();expect(main.moveTop).not.toHaveBeenCalled();expect(main.focus).not.toHaveBeenCalled();expect(main.webContents.focus).not.toHaveBeenCalled();music.dispose();
+  });
+  it('reconciles a delayed activation only once and cancels a disposed request',async()=>{
+    const {music,main}=setup();main.isFocused.mockReturnValue(false);mock.execute!('sound');
+    await new Promise(resolve=>setImmediate(resolve));expect(main.focus).toHaveBeenCalledTimes(2);
+    await new Promise(resolve=>setImmediate(resolve));expect(main.focus).toHaveBeenCalledTimes(2);
+    mock.execute!('space');music.dispose();await new Promise(resolve=>setImmediate(resolve));expect(main.focus).toHaveBeenCalledTimes(3);
+  });
+  it('does not reopen a window minimized again before the focus reconciliation',async()=>{
+    const {music,main}=setup();main.isFocused.mockReturnValue(false);mock.execute!('sound');main.isMinimized.mockReturnValue(true);
+    await new Promise(resolve=>setImmediate(resolve));expect(main.focus).toHaveBeenCalledOnce();expect(main.restore).not.toHaveBeenCalled();music.dispose();
+  });
+  it('does not act on a destroyed main window',()=>{
+    const {music,main,send}=setup();main.isDestroyed.mockReturnValue(true);send.mockClear();mock.execute!('space');
+    expect(main.show).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();music.dispose();
+  });
   it('preserves a saved custom chord and never registers legacy global media keys',async()=>{
     const {music}=setup({...DEFAULT_DESKTOP_MUSIC,shortcutsEnabled:true,wheel:{...DEFAULT_DESKTOP_MUSIC.wheel,accelerator:'Control+Alt+Space'}});
     await Promise.resolve();

@@ -15,6 +15,7 @@ export class DesktopMusic {
   private lyricGuard?:IpcGuard;
   private lyricsReady=false;
   private topmostTimer?:NodeJS.Timeout;
+  private foregroundRetry?:NodeJS.Immediate;
   private maintainLyricsTopmost=()=>{clearTimeout(this.topmostTimer);if(this.settings.lyricsVisible)this.topmostTimer=setTimeout(()=>this.presentLyricsWindow(),0);};
   private wheel:DesktopWheel;private wheelReady:Promise<void>;private saving=false;
   private displayChange=()=>{if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.setBounds(this.bounds(this.lyrics.getBounds()));};
@@ -22,8 +23,10 @@ export class DesktopMusic {
     this.guard=new IpcGuard(main.webContents.id);
     this.settings=readDesktopMusicSettings(store.getSetting(KEY));
     this.wheel=new DesktopWheel(command=>{
+      clearImmediate(this.foregroundRetry);
+      if(main.isDestroyed())return;
       if(command==='lyrics'){void this.toggleLyrics().catch(()=>{});return;}
-      if(['sound','space','focus'].includes(command)){if(main.isMinimized())main.restore();main.show();main.focus();}
+      if(['sound','space','focus'].includes(command))this.activateMain();
       if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.desktopWheelCommand,command);
     },message=>{this.error=message;if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.desktopMusicState,this.state());});
     this.wheelReady=this.wheel.configure(this.settings.wheel!).catch(error=>{this.error=error instanceof Error?error.message:'轮盘不可用';});
@@ -35,7 +38,7 @@ export class DesktopMusic {
     ipcMain.handle(ACTION,(event,value)=>{
       if(!this.lyrics||!this.lyricGuard||event.sender!==this.lyrics.webContents||event.senderFrame!==event.sender.mainFrame||!LYRICS_ACTIONS.includes(value))throw new Error('LYRICS_ACTION_REJECTED');
       return this.lyricGuard.invoke(ACTION,event,()=>{
-        if(value==='settings'){if(main.isDestroyed())return;if(main.isMinimized())main.restore();main.show();main.focus();main.webContents.send(IPC_CHANNELS.desktopLyricsSettingsOpen);return;}
+        if(value==='settings'){if(main.isDestroyed())return;this.activateMain();main.webContents.send(IPC_CHANNELS.desktopLyricsSettingsOpen);return;}
         if(['play-pause','next','previous'].includes(value)){if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.mediaCommand,value);return;}
         if(value==='close'||value==='lock')return this.save({...this.settings,...(value==='close'?{lyricsVisible:false}:{lyricsLocked:true})});
         const style={...this.settings.lyricsStyle!};
@@ -52,6 +55,19 @@ export class DesktopMusic {
     this.updateWindow();
   }
   state():DesktopMusicState{return {settings:structuredClone(this.settings),error:this.error};}
+  private activateMain(){
+    clearImmediate(this.foregroundRetry);
+    const main=this.main;if(main.isDestroyed())return;
+    if(main.isMinimized())main.restore();
+    main.show();main.moveTop();main.focus();main.webContents.focus();
+    // Restore/show and a global key-up can complete after the first focus call.
+    // Reconcile once, never poll or keep the main window always-on-top.
+    this.foregroundRetry=setImmediate(()=>{
+      this.foregroundRetry=undefined;
+      if(main.isDestroyed()||!main.isVisible()||main.isMinimized()||main.isFocused())return;
+      main.moveTop();main.focus();main.webContents.focus();
+    });
+  }
   async toggleLyrics(){const state=await this.save({...this.settings,lyricsVisible:!this.settings.lyricsVisible});if(state.settings.lyricsVisible)this.bringLyricsToMainDisplay();return state;}
   unlockLyrics(){return this.save({...this.settings,lyricsLocked:false,lyricsVisible:true});}
   async resetLyricsPosition(){await this.save({...this.settings,lyricsVisible:true},true);this.bringLyricsToMainDisplay();}
@@ -110,5 +126,5 @@ export class DesktopMusic {
     this.lyrics.setIgnoreMouseEvents(this.settings.lyricsLocked,{forward:true});this.lyrics.setMovable(!this.settings.lyricsLocked);this.presentLyricsWindow();this.sendFrame();
   }
   private sendFrame(){if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.webContents.send(FRAME,{...this.frame,locked:this.settings.lyricsLocked,style:this.settings.lyricsStyle});}
-  dispose(){clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopWheelRecording,IPC_CHANNELS.desktopLyricsRecover,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.main.removeListener('blur',this.maintainLyricsTopmost);this.main.removeListener('minimize',this.maintainLyricsTopmost);this.main.removeListener('restore',this.maintainLyricsTopmost);this.main.removeListener('show',this.maintainLyricsTopmost);this.discardLyricsWindow();}
+  dispose(){clearImmediate(this.foregroundRetry);clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopWheelRecording,IPC_CHANNELS.desktopLyricsRecover,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.main.removeListener('blur',this.maintainLyricsTopmost);this.main.removeListener('minimize',this.maintainLyricsTopmost);this.main.removeListener('restore',this.maintainLyricsTopmost);this.main.removeListener('show',this.maintainLyricsTopmost);this.discardLyricsWindow();}
 }
