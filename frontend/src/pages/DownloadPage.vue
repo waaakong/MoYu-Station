@@ -20,7 +20,7 @@
         <a v-else-if="access === 'allowed' && release" class="download-primary" href="/api/download/windows" @click="downloadStarted = true">下载 Windows 安装包 <span aria-hidden="true">↓</span></a>
         <button v-else class="download-primary" type="button" :disabled="loading" @click="refresh">{{ loading ? '正在检查…' : '重新检查下载权限' }}</button>
         <p v-if="publicUrl" class="download-note"><a v-if="access === 'allowed'" href="/api/download/windows">GitHub 无法连接？使用服务器备用下载</a><RouterLink v-else :to="{name:'login',query:{redirect:'/download'}}">GitHub 无法连接？登录后使用服务器备用下载</RouterLink></p>
-        <p class="download-note" role="status">{{ downloadStarted ? '请在浏览器下载列表查看进度，下载的安装包需由你启动。' : '首次安装请手动下载安装包；新引导版支持受控的一键更新，当前仅准备本人生产试点。' }}</p>
+        <p class="download-note" role="status">{{ downloadStarted ? '请在浏览器下载列表查看进度，下载的安装包需由你启动。' : '首次安装请手动下载安装包；已安装新版客户端的用户，登录后可在“我的 → 客户端版本”查看可用更新，点击一次授权下载、安装及重启。' }}</p>
         <details v-if="release" class="download-checksum"><summary>核对 SHA-256 校验值</summary><code>{{ release.sha256 }}</code><button type="button" @click="copyHash">{{ copied ? '已复制' : '复制校验值' }}</button><p v-if="copyFailed" role="alert">无法自动复制，请手动选中上方校验值。</p></details>
       </section>
     </div>
