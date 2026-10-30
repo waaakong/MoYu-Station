@@ -301,9 +301,9 @@ watch(
 }
 .desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.topbar){display:flex}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
 /* Paint the stage behind native controls; keep content below the drag region. */
-.desktop-shell--native.desktop-shell--listening > .window-chrome{position:absolute;inset:0 8px auto 0;z-index:var(--sr-layer-rail)}
-.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.listening-stage){box-sizing:border-box;padding-top:44px}
-.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.account-menu){top:118px}
+.desktop-shell--native.desktop-shell--listening > .window-chrome{position:absolute;inset:8px 8px auto 0;height:46px;z-index:var(--sr-layer-rail)}
+.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.listening-stage){box-sizing:border-box;padding-top:60px}
+.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.account-menu){top:134px}
 </style>
 
 <style>

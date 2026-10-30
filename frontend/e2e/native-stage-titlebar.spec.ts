@@ -28,6 +28,12 @@ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:10
     await expect(stage).toBeVisible();
     await expect(page.locator('#moyu-startup')).toHaveCount(0);
     const chrome=page.locator('.desktop-shell > .window-chrome');
+    const controlBox=(await chrome.getByRole('group',{name:'窗口控制'}).boundingBox())!;
+    // A 44px button plus the group's two borders must not overflow the
+    // titlebar or be clipped against the native window's rounded top edge.
+    expect(controlBox.y).toBe(8);
+    expect(controlBox.x+controlBox.width).toBe(viewport.width-8);
+    expect(controlBox.height).toBe(46);
     const metrics=await page.evaluate(()=>{
       const stage=document.querySelector('.listening-stage')!;
       const background=stage.querySelector('.parity-backgrounds')!;
@@ -46,6 +52,11 @@ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:10
     expect(metrics.drag).toBe('drag');expect(metrics.noDrag).toBe('no-drag');expect(metrics.overflow).toBe(false);
     for(const [name,flag] of [['最小化窗口','__stageMinimized'],['最大化窗口','__stageMaximized'],['关闭窗口','__stageClosed']]){
       const button=chrome.getByRole('button',{name,exact:true});
+      const box=(await button.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(controlBox.y);
+      expect(box.y+box.height).toBeLessThanOrEqual(controlBox.y+controlBox.height);
+      const icon=(await button.locator('svg').boundingBox())!;
+      expect(Math.abs(icon.y+icon.height/2-(box.y+box.height/2))).toBeLessThan(0.1);
       await expect(button).toBeInViewport();await button.click();
       expect(await page.evaluate(key=>(window as any)[key],flag)).toBe(true);
     }
