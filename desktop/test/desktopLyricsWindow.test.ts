@@ -12,7 +12,7 @@ import {DesktopMusic} from '../src/main/music/desktopMusic';
 import {IPC_CHANNELS} from '@studyroom/contracts';
 describe('native desktop lyrics recovery',()=>{
   beforeEach(()=>{mock.windows=[];mock.handlers.clear();mock.mediaRegister.mockClear();mock.configure.mockReset().mockResolvedValue(undefined);mock.load.mockReset().mockResolvedValue(undefined);});
-  function setup(saved?:unknown){const send=vi.fn(),store={getSetting:vi.fn((key:string):unknown=>key==='music.desktop-v1'?saved:undefined),setSetting:vi.fn()},main={webContents:{id:1,send,on:()=>{}},isDestroyed:()=>false,getBounds:()=>({x:0,y:0,width:1440,height:900})};return {music:new DesktopMusic(main as any,store as any),send,store};}
+  function setup(saved?:unknown){const send=vi.fn(),store={getSetting:vi.fn((key:string):unknown=>key==='music.desktop-v1'?saved:undefined),setSetting:vi.fn()},events=new Map<string,Function>(),main={events,on:(name:string,fn:Function)=>events.set(name,fn),removeListener:(name:string)=>events.delete(name),focus:vi.fn(),webContents:{id:1,send,on:()=>{}},isDestroyed:()=>false,getBounds:()=>({x:0,y:0,width:1440,height:900})};return {music:new DesktopMusic(main as any,store as any),send,store,main};}
   it('preserves a saved custom chord and never registers legacy global media keys',async()=>{
     const {music}=setup({...DEFAULT_DESKTOP_MUSIC,shortcutsEnabled:true,wheel:{...DEFAULT_DESKTOP_MUSIC.wheel,accelerator:'Control+Alt+Space'}});
     await Promise.resolve();
@@ -47,13 +47,24 @@ describe('native desktop lyrics recovery',()=>{
     const {music}=setup(saved);const old=mock.windows[0];old.events.get('ready-to-show')!();old.showInactive.mockClear();
     await music.resetLyricsPosition();const fresh=mock.windows[1];expect(old.destroyed).toBe(true);expect(fresh.destroyed).toBe(false);
     old.events.get('ready-to-show')!();expect(old.showInactive).not.toHaveBeenCalled();expect(fresh.showInactive).not.toHaveBeenCalled();
-    fresh.events.get('ready-to-show')!();expect(fresh.showInactive).toHaveBeenCalled();expect(fresh.setAlwaysOnTop).toHaveBeenCalledWith(true,'floating');
+    fresh.events.get('ready-to-show')!();expect(fresh.showInactive).toHaveBeenCalled();expect(fresh.setAlwaysOnTop).toHaveBeenCalledWith(true,'screen-saver');
     expect(music.state().settings).toMatchObject({lyricsVisible:true,lyricsLocked:true,lyricsStyle:{highlight:'#abcdef'}});music.dispose();
   });
   it('failed recovery persistence keeps the original window and settings',async()=>{
     const {music,store}=setup({...DEFAULT_DESKTOP_MUSIC,lyricsVisible:true});const original=mock.windows[0];
     store.setSetting.mockImplementation(()=>{throw new Error('private path');});await expect(music.resetLyricsPosition()).rejects.toThrow('本机设置保存失败');
     expect(original.destroyed).toBe(false);expect(mock.windows).toHaveLength(1);expect(music.state().settings.lyricsVisible).toBe(true);music.dispose();
+  });
+  it('reasserts topmost after main-window switching and demotion without calling focus',async()=>{
+    const {music,main}=setup({...DEFAULT_DESKTOP_MUSIC,lyricsVisible:true});const window=mock.windows[0];window.events.get('ready-to-show')!();
+    window.setAlwaysOnTop.mockClear();main.events.get('blur')!();await vi.waitFor(()=>expect(window.setAlwaysOnTop).toHaveBeenCalledWith(true,'screen-saver'));
+    window.setAlwaysOnTop.mockClear();window.events.get('always-on-top-changed')!({},false);await vi.waitFor(()=>expect(window.setAlwaysOnTop).toHaveBeenCalledWith(true,'screen-saver'));
+    expect(main.focus).not.toHaveBeenCalled();music.dispose();expect(main.events.size).toBe(0);
+  });
+  it('does not resurrect disabled lyrics from delayed window events',async()=>{
+    const {music,main}=setup({...DEFAULT_DESKTOP_MUSIC,lyricsVisible:true});const window=mock.windows[0];window.events.get('ready-to-show')!();
+    main.events.get('minimize')!();await (music as any).save({...music.state().settings,lyricsVisible:false});window.showInactive.mockClear();
+    await new Promise(resolve=>setTimeout(resolve,0));expect(window.showInactive).not.toHaveBeenCalled();music.dispose();
   });
   it('wheel opening brings lyrics back from another connected display',async()=>{const {music,store}=setup();store.getSetting.mockReturnValue({x:-1486,y:602,width:920,height:220});await music.toggleLyrics();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});music.dispose();});
   it('failed renderer loads can be recreated rather than reusing a blank window',async()=>{mock.load.mockRejectedValueOnce(new Error('load failed'));const {music}=setup();await music.resetLyricsPosition();await vi.waitFor(()=>expect(mock.windows[0].destroyed).toBe(true));expect(music.state().error).toContain('加载失败');await music.resetLyricsPosition();expect(mock.windows).toHaveLength(2);expect(mock.windows[1].destroyed).toBe(false);music.dispose();});

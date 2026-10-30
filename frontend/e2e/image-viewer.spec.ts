@@ -27,6 +27,8 @@ async function setup(page: Page, holdSecondImage?: Promise<void>) {
   await page.locator(".media-tile").first().click();
   await expect(page.getByRole("dialog", { name: "图片预览" })).toBeVisible();
   await expect(page.getByRole("button", { name: "实际大小", exact: true })).toBeEnabled();
+  // Pixel comparisons require the modal's own entry translation to have settled.
+  await expect(page.getByRole("dialog", { name: "图片预览" })).not.toHaveAttribute('data-sr-motion','sr-dialog-enter');
   return { recover: () => { failImage = false; } };
 }
 
