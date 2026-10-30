@@ -18,7 +18,7 @@ export class DesktopWheel {
     if(process.platform!=='win32'||!settings.enabled){this.stop();this.settings=settings;return;}
     if(this.helper&&this.settings?.accelerator===settings.accelerator&&this.settings.allowFullscreen===settings.allowFullscreen){this.cancel();await this.ensureWindow();this.settings=settings;return;}
     const helperPath=app.isPackaged?join(process.resourcesPath,'app.asar.unpacked/dist/native/moyu-input.exe'):join(app.getAppPath(),'dist/native/moyu-input.exe');
-    const candidate=spawn(helperPath,nativeArguments(settings.accelerator,settings.allowFullscreen),{windowsHide:true,env:metadataEnvironment()});
+    const candidate=spawn(helperPath,[...nativeArguments(settings.accelerator,settings.allowFullscreen),String(process.pid)],{windowsHide:true,env:metadataEnvironment()});
     this.pending.add(candidate);
     candidate.stdin.on('error',()=>{});candidate.stderr.resume();
     let buffer='',started=false;

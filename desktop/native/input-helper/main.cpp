@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <tlhelp32.h>
 #include <atomic>
 #include <cstdio>
 #include <cwchar>
@@ -10,9 +11,11 @@ static HHOOK keyboardHook=nullptr,mouseHook=nullptr;
 static DWORD ownerThread=0;static UINT trigger=VK_SPACE,modifiers=MOD_CONTROL|MOD_ALT;
 static bool active=false,held=false,blockRight=false,blockEscape=false,allowFullscreen=false;
 static unsigned long sequence=0;static HWND foreground=nullptr;
+static DWORD parentProcess=0;static bool pendingRelease=false;static POINT releasePoint{};
+static constexpr UINT finishMessage=WM_APP+1;
 static std::atomic<ULONGLONG> heartbeat{0};static ULONGLONG lastMove=0;
 static void emit(const char* type){POINT p{};GetCursorPos(&p);std::printf("%s %lu %ld %ld\n",type,sequence,p.x,p.y);std::fflush(stdout);}
-static void cancel(){if(active){active=false;emit("CANCEL");}}
+static void cancel(){if(active||pendingRelease){active=false;pendingRelease=false;emit("CANCEL");}}
 static bool down(int key){return (GetAsyncKeyState(key)&0x8000)!=0;}
 static bool combination(){return down(VK_CONTROL)&&down(VK_MENU)&&(!(modifiers&MOD_SHIFT)||down(VK_SHIFT))&&!down(VK_LWIN)&&!down(VK_RWIN);}
 static bool fullscreen(){
@@ -25,11 +28,23 @@ static bool control(UINT key){return key==VK_CONTROL||key==VK_LCONTROL||key==VK_
 static bool alt(UINT key){return key==VK_MENU||key==VK_LMENU||key==VK_RMENU;}
 static bool shift(UINT key){return key==VK_SHIFT||key==VK_LSHIFT||key==VK_RSHIFT;}
 static bool permitted(){return GetTickCount64()-heartbeat.load()<2500&&(allowFullscreen||!fullscreen());}
-static void begin(){held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");}
+static void begin(){if(pendingRelease)cancel();held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");}
 static void finish(){
   if(!active)return;
   if(GetForegroundWindow()!=foreground||!permitted())cancel();
-  else{active=false;emit("RELEASE");}
+  else{
+    active=false;pendingRelease=true;GetCursorPos(&releasePoint);
+    // Return from the low-level hook before handing off foreground permission.
+    // Preserve the release coordinates and cancel if a newer gesture intervenes.
+    if(!PostThreadMessageW(ownerThread,finishMessage,sequence,0))cancel();
+  }
+}
+static bool ownsParent(DWORD expected){
+  HANDLE snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
+  if(snapshot==INVALID_HANDLE_VALUE)return false;
+  PROCESSENTRY32W entry{};entry.dwSize=sizeof(entry);bool found=false;
+  if(Process32FirstW(snapshot,&entry))do{if(entry.th32ProcessID==GetCurrentProcessId()){found=entry.th32ParentProcessID==expected;break;}}while(Process32NextW(snapshot,&entry));
+  CloseHandle(snapshot);return found;
 }
 static LRESULT CALLBACK keyboard(int code,WPARAM msg,LPARAM data){
   if(code<0)return CallNextHookEx(keyboardHook,code,msg,data);
@@ -71,7 +86,14 @@ static LRESULT CALLBACK mouse(int code,WPARAM msg,LPARAM data){
   return CallNextHookEx(mouseHook,code,msg,data);
 }
 int wmain(int argc,wchar_t** argv){
-  if(argc!=4)return 2;wchar_t* end=nullptr;
+  if(argc!=5)return 2;wchar_t* end=nullptr;
+  // The only process we can authorize is our actual launching parent. Never
+  // accept ASFW_ANY, a renderer-supplied PID or a window owned by another app.
+  if(!argv[4][0])return 2;
+  for(const wchar_t* digit=argv[4];*digit;++digit)if(*digit<L'0'||*digit>L'9')return 2;
+  const unsigned long long parent=_wcstoui64(argv[4],&end,10);
+  if(!end||*end||parent==0||parent>=MAXDWORD||!ownsParent(static_cast<DWORD>(parent)))return 2;
+  parentProcess=static_cast<DWORD>(parent);
   trigger=static_cast<UINT>(wcstoul(argv[1],&end,10));if(!end||*end||!(trigger==0||trigger==VK_SPACE||(trigger>='A'&&trigger<='Z')||(trigger>='0'&&trigger<='9')||(trigger>=VK_F1&&trigger<=VK_F12)))return 2;
   modifiers=static_cast<UINT>(wcstoul(argv[2],&end,10));if(!end||*end||(modifiers!=(MOD_CONTROL|MOD_ALT)&&modifiers!=(MOD_CONTROL|MOD_ALT|MOD_SHIFT)))return 2;
   if(wcscmp(argv[3],L"0")&&wcscmp(argv[3],L"1"))return 2;allowFullscreen=!wcscmp(argv[3],L"1");
@@ -86,6 +108,19 @@ int wmain(int argc,wchar_t** argv){
   std::thread([]{char c;while(std::fread(&c,1,1,stdin)==1){if(c=='H')heartbeat=GetTickCount64();}PostThreadMessageW(ownerThread,WM_QUIT,0,0);}).detach();
   std::puts("READY");std::fflush(stdout);
   while(GetMessageW(&msg,nullptr,0,0)>0){
+    if(msg.message==finishMessage){
+      if(pendingRelease&&msg.wParam==sequence){
+        if(GetForegroundWindow()!=foreground||!permitted())cancel();
+        else{
+          pendingRelease=false;
+          // Windows enforces whether this gesture grants foreground rights.
+          // Failure is not worked around with injected input or global policy.
+          AllowSetForegroundWindow(parentProcess);
+          std::printf("RELEASE %lu %ld %ld\n",sequence,releasePoint.x,releasePoint.y);std::fflush(stdout);
+        }
+      }
+      continue;
+    }
     if(msg.message==WM_TIMER){if(GetTickCount64()-heartbeat.load()>2500){cancel();held=false;}else if(!GetForegroundWindow()||GetForegroundWindow()!=foreground)cancel();}
     TranslateMessage(&msg);DispatchMessageW(&msg);
   }
