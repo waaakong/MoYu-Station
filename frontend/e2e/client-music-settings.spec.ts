@@ -28,3 +28,14 @@ test('wheel recorder cancels and saves a changed chord without media key control
   await expect(page.locator('#fixture-result')).toContainText('Control+Alt+K');
   await expect(page.getByRole('checkbox',{name:'启用全局媒体快捷键',exact:true})).toHaveCount(0);
 });
+
+test('recovering lyrics drains pending changes before enabling and re-reading the native window',async({page})=>{
+  await page.goto('/e2e/fixtures/client-settings.html');
+  await page.getByRole('button',{name:'歌词高亮：暖杏',exact:true}).click();
+  await page.getByRole('button',{name:'找回歌词窗口',exact:true}).click();
+  await expect(page.locator('#fixture-result')).toContainText('已请求找回窗口');
+  await expect(page.getByRole('switch',{name:'显示桌面歌词',exact:true})).toBeChecked();
+  await expect(page.getByRole('button',{name:'歌词高亮：暖杏',exact:true})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('tab',{name:'快捷轮盘',exact:true}).click();await page.getByRole('tab',{name:'桌面歌词',exact:true}).click();
+  await expect(page.getByRole('switch',{name:'显示桌面歌词',exact:true})).toBeChecked();
+});

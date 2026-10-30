@@ -5,7 +5,7 @@ vi.mock('electron',()=>({app:{getAppPath:()=>'/app'},globalShortcut:{register:mo
   destroyed=false;events=new Map<string,Function>();bounds:any;webEvents=new Map<string,Function>();
   webContents={id:2,send:vi.fn(),setWindowOpenHandler:()=>{},on:(key:string,fn:Function)=>this.webEvents.set(key,fn),session:{setPermissionRequestHandler:()=>{},setPermissionCheckHandler:()=>{}}};
   constructor(options:any){this.bounds=options;mock.windows.push(this);}
-  isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}hide=vi.fn();showInactive=vi.fn();setBounds(value:any){this.bounds=value;}getBounds(){return this.bounds;}setIgnoreMouseEvents(){}setMovable(){}removeMenu(){}once(key:string,fn:Function){this.events.set(key,fn);}on(key:string,fn:Function){this.events.set(key,fn);}loadFile(){return mock.load();}
+  isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}hide=vi.fn();showInactive=vi.fn();isMinimized=vi.fn(()=>false);restore=vi.fn();setAlwaysOnTop=vi.fn();moveTop=vi.fn();setBounds(value:any){this.bounds=value;}getBounds(){return this.bounds;}setIgnoreMouseEvents(){}setMovable(){}removeMenu(){}once(key:string,fn:Function){this.events.set(key,fn);}on(key:string,fn:Function){this.events.set(key,fn);}loadFile(){return mock.load();}
 }}));
 vi.mock('../src/main/music/desktopWheel',()=>({DesktopWheel:class{constructor(execute:any){mock.execute=execute;}configure=mock.configure;setRecording=mock.recording;dispose(){}}}));
 import {DesktopMusic} from '../src/main/music/desktopMusic';
@@ -41,7 +41,20 @@ describe('native desktop lyrics recovery',()=>{
     expect(music.state().settings.lyricsVisible).toBe(true);expect(mock.windows).toHaveLength(1);
     music.dispose();expect(mock.handlers.has(IPC_CHANNELS.desktopLyricsRecover)).toBe(false);
   });
-  it('tray recovery creates a hidden/missing window in current screen bounds',async()=>{const {music}=setup();await music.resetLyricsPosition();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});expect(mock.windows[0].showInactive).toHaveBeenCalled();expect(music.state().settings.lyricsVisible).toBe(true);music.dispose();});
+  it('tray recovery waits for the first frame and uses current screen bounds',async()=>{const {music}=setup();await music.resetLyricsPosition();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});expect(mock.windows[0].showInactive).not.toHaveBeenCalled();mock.windows[0].events.get('ready-to-show')!();expect(mock.windows[0].showInactive).toHaveBeenCalled();expect(mock.windows[0].moveTop).toHaveBeenCalled();expect(music.state().settings.lyricsVisible).toBe(true);music.dispose();});
+  it('recovery replaces an alive but invisible surface and ignores its late readiness callback',async()=>{
+    const saved={...DEFAULT_DESKTOP_MUSIC,lyricsVisible:true,lyricsLocked:true,lyricsStyle:{...DEFAULT_DESKTOP_MUSIC.lyricsStyle,highlight:'#abcdef'}};
+    const {music}=setup(saved);const old=mock.windows[0];old.events.get('ready-to-show')!();old.showInactive.mockClear();
+    await music.resetLyricsPosition();const fresh=mock.windows[1];expect(old.destroyed).toBe(true);expect(fresh.destroyed).toBe(false);
+    old.events.get('ready-to-show')!();expect(old.showInactive).not.toHaveBeenCalled();expect(fresh.showInactive).not.toHaveBeenCalled();
+    fresh.events.get('ready-to-show')!();expect(fresh.showInactive).toHaveBeenCalled();expect(fresh.setAlwaysOnTop).toHaveBeenCalledWith(true,'floating');
+    expect(music.state().settings).toMatchObject({lyricsVisible:true,lyricsLocked:true,lyricsStyle:{highlight:'#abcdef'}});music.dispose();
+  });
+  it('failed recovery persistence keeps the original window and settings',async()=>{
+    const {music,store}=setup({...DEFAULT_DESKTOP_MUSIC,lyricsVisible:true});const original=mock.windows[0];
+    store.setSetting.mockImplementation(()=>{throw new Error('private path');});await expect(music.resetLyricsPosition()).rejects.toThrow('本机设置保存失败');
+    expect(original.destroyed).toBe(false);expect(mock.windows).toHaveLength(1);expect(music.state().settings.lyricsVisible).toBe(true);music.dispose();
+  });
   it('wheel opening brings lyrics back from another connected display',async()=>{const {music,store}=setup();store.getSetting.mockReturnValue({x:-1486,y:602,width:920,height:220});await music.toggleLyrics();expect(mock.windows[0].bounds).toEqual({x:260,y:640,width:920,height:220});music.dispose();});
   it('failed renderer loads can be recreated rather than reusing a blank window',async()=>{mock.load.mockRejectedValueOnce(new Error('load failed'));const {music}=setup();await music.resetLyricsPosition();await vi.waitFor(()=>expect(mock.windows[0].destroyed).toBe(true));expect(music.state().error).toContain('加载失败');await music.resetLyricsPosition();expect(mock.windows).toHaveLength(2);expect(mock.windows[1].destroyed).toBe(false);music.dispose();});
   it('renderer termination reports failure and permits recovery',async()=>{const {music}=setup();await music.resetLyricsPosition();mock.windows[0].webEvents.get('render-process-gone')!();expect(music.state().error).toContain('已中断');await music.resetLyricsPosition();expect(mock.windows).toHaveLength(2);expect(music.state().error).toBeUndefined();music.dispose();});

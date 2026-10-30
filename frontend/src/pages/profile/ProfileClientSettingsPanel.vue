@@ -4,7 +4,7 @@
 
     <p v-if="editor.error||readError" role="alert" class="error">{{ editor.error||readError }}</p>
     <p v-if="!draft">{{ loading?'正在读取本机设置…':'无法读取本机设置，请重试。' }}</p>
-    <template v-if="draft"><fieldset>
+    <template v-if="draft"><fieldset :disabled="recovering">
       <section v-show="tab==='lyrics'" id="client-lyrics" role="tabpanel" aria-labelledby="client-tab-lyrics">
         <div class="preview" :style="previewStyle"><small>透明桌面歌词 · 外观预览</small><div class="sample">让晚风，慢一点</div><div v-if="draft.lyricsStyle?.rows===2" class="sample-next">把时间留在山海之间</div></div>
         <label class="row"><span>显示桌面歌词<small>也可从轮盘与播放器开启</small></span><input v-model="draft.lyricsVisible" type="checkbox" role="switch" aria-label="显示桌面歌词"></label>
@@ -16,7 +16,7 @@
           <LyricColorPicker :model-value="draft.lyricsStyle.base||'#aab7a3'" label="歌词原色" @update:model-value="draft.lyricsStyle.base=$event" />
           <label class="row"><span>平滑上滑换句<small>跳进度时直接定位</small></span><input v-model="draft.lyricsStyle.smoothScroll" type="checkbox" role="switch" aria-label="平滑上滑换句"></label>
           <label class="slider">歌词不透明度<output>{{ Math.round((draft.lyricsStyle.opacity??.85)*100) }}%</output><input v-model.number="draft.lyricsStyle.opacity" type="range" min="0" max="1" step=".01" aria-label="歌词不透明度"></label>
-        </div><button type="button" @click="recoverLyrics">找回歌词位置</button>
+        </div><button type="button" :disabled="recovering||recording" title="重新创建歌词浮窗并移回当前屏幕，保留外观与锁定设置" @click="recoverLyrics">{{recovering?'正在找回…':'找回歌词窗口'}}</button>
       </section>
       <section v-show="tab==='wheel'" id="client-wheel" role="tabpanel" aria-labelledby="client-tab-wheel"><template v-if="draft.wheel">
         <label class="row"><span>启用全局快捷轮盘<small>按住组合键，移向操作，松开执行</small></span><input v-model="draft.wheel.enabled" type="checkbox" role="switch" aria-label="启用全局快捷轮盘"></label>
@@ -37,7 +37,7 @@ import {DesktopSettingsDraft} from '../../audio/lyrics/desktopSettingsDraft';
 import {SettingsAutosave} from '../../audio/lyrics/settingsAutosave';
 import {desktopMusicState as model,saveDesktopMusic} from '../../audio/lyrics/desktopLyrics';
 import {runMotion,type MotionHandle} from '../../motion/runtime';
-const editor=reactive(new DesktopSettingsDraft()),draft=computed(()=>editor.draft),tab=ref('lyrics'),root=ref<HTMLElement>(),loading=ref(false),readError=ref('');
+const editor=reactive(new DesktopSettingsDraft()),draft=computed(()=>editor.draft),tab=ref('lyrics'),root=ref<HTMLElement>(),loading=ref(false),readError=ref(''),recovering=ref(false);
 const tabs=[{key:'lyrics',label:'桌面歌词'},{key:'wheel',label:'快捷轮盘'}];
 const commandLabels:Record<DesktopWheelCommand,string>={'play-pause':'播放／暂停',next:'下一首',previous:'上一首',mute:'音乐静音',focus:'专注开始／暂停',sound:'声音面板',space:'返回空间',lyrics:'桌面歌词'};
 const previewStyle=computed(()=>{const s=draft.value?.lyricsStyle;return {'--lyric-size':(s?.fontSize??38)+'px','--lyric-highlight':s?.highlight||'#deefaa','--lyric-base':s?.base||'#aab7a3','--lyric-opacity':s?.opacity??.85,fontFamily:s?.fontFamily==='serif'?'SimSun,serif':s?.fontFamily==='sans'?'Microsoft YaHei,sans-serif':'inherit'};});
@@ -50,7 +50,16 @@ watch(()=>JSON.stringify(draft.value),()=>{if(editor.dirty&&!recording.value)aut
 function changeTab(value:string){cancelRecord();tab.value=value;motion?.revert();if(root.value)motion=runMotion(root.value,'client-settings-tab',tl=>{tl.fromTo(root.value!.querySelector('#client-'+value),{y:7,opacity:.5},{y:0,opacity:1,duration:.22});});}
 function tabKey(event:KeyboardEvent,key:string){const index=tabs.findIndex(item=>item.key===key);const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:['ArrowRight','ArrowDown'].includes(event.key)?(index+1)%tabs.length:['ArrowLeft','ArrowUp'].includes(event.key)?(index+tabs.length-1)%tabs.length:-1;if(next<0)return;event.preventDefault();const value=tabs[next]!.key;changeTab(value);root.value?.querySelector<HTMLButtonElement>('#client-tab-'+value)?.focus();}
 function moveSlot(index:number,value:string){const slots=draft.value?.wheel?.slots;if(!slots||!(DESKTOP_WHEEL_COMMANDS as readonly string[]).includes(value))return;const from=slots.indexOf(value as DesktopWheelCommand);if(from<0)return;const old=slots[index]!;slots[index]=value as DesktopWheelCommand;slots[from]=old;}
-async function recoverLyrics(){readError.value='';try{await window.studyRoomDesktop?.resetDesktopLyricsPosition?.();}catch{readError.value='无法找回歌词窗口，请重试。';}}
+async function recoverLyrics(){
+  if(recovering.value)return;recovering.value=true;readError.value='';
+  try{
+    await autosave.flush();if(editor.dirty)throw new Error('请先重试未保存设置，再找回歌词窗口。');
+    const bridge=window.studyRoomDesktop;if(!bridge?.resetDesktopLyricsPosition)throw new Error('当前客户端无法找回歌词窗口。');
+    await bridge.resetDesktopLyricsPosition();const state=await bridge.getDesktopMusic();
+    if(alive){model.state=state;editor.receive(state.settings);}
+  }catch(error){if(alive)readError.value=error instanceof Error?error.message:'无法找回歌词窗口，请重试。';}
+  finally{if(alive)recovering.value=false;}
+}
 let recordingTicket=0,recordingTimer:ReturnType<typeof setTimeout>|undefined;
 const recording=ref(false),recordMessage=ref('');let originalChord='',candidate='';
 function releaseRecording(){clearTimeout(recordingTimer);recordingTicket++;void window.studyRoomDesktop?.setDesktopWheelRecording?.(false).catch(()=>{});}

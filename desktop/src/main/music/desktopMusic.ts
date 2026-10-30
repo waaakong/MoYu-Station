@@ -13,6 +13,7 @@ export class DesktopMusic {
   private lyrics?:BrowserWindow;private frame:DesktopLyricsFrame={title:'墨屿 · 桌面歌词',line:'暂无播放内容',nextLine:'',status:''};
   private guard:IpcGuard;private saveTimer?:NodeJS.Timeout;
   private lyricGuard?:IpcGuard;
+  private lyricsReady=false;
   private wheel:DesktopWheel;private wheelReady:Promise<void>;private saving=false;
   private displayChange=()=>{if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.setBounds(this.bounds(this.lyrics.getBounds()));};
   constructor(private main:BrowserWindow,private store:LocalDatabaseStore){
@@ -50,10 +51,16 @@ export class DesktopMusic {
   state():DesktopMusicState{return {settings:structuredClone(this.settings),error:this.error};}
   async toggleLyrics(){const state=await this.save({...this.settings,lyricsVisible:!this.settings.lyricsVisible});if(state.settings.lyricsVisible)this.bringLyricsToMainDisplay();return state;}
   unlockLyrics(){return this.save({...this.settings,lyricsLocked:false,lyricsVisible:true});}
-  async resetLyricsPosition(){await this.save({...this.settings,lyricsVisible:true});this.bringLyricsToMainDisplay();}
-  private bringLyricsToMainDisplay(){if(this.lyrics&&!this.lyrics.isDestroyed()&&!this.main.isDestroyed()){const area=screen.getDisplayMatching(this.main.getBounds()).workArea;this.lyrics.setBounds(this.bounds({x:area.x+(area.width-Math.min(920,area.width))/2,y:area.y+area.height-Math.min(220,area.height)-40}));this.lyrics.showInactive();}}
+  async resetLyricsPosition(){await this.save({...this.settings,lyricsVisible:true},true);this.bringLyricsToMainDisplay();}
+  private bringLyricsToMainDisplay(){if(this.lyrics&&!this.lyrics.isDestroyed()&&!this.main.isDestroyed()){const area=screen.getDisplayMatching(this.main.getBounds()).workArea;this.lyrics.setBounds(this.bounds({x:area.x+(area.width-Math.min(920,area.width))/2,y:area.y+area.height-Math.min(220,area.height)-40}));this.presentLyricsWindow();}}
+  private presentLyricsWindow(){
+    const window=this.lyrics;if(!window||window.isDestroyed()||!this.lyricsReady||!this.settings.lyricsVisible)return;
+    if(window.isMinimized())window.restore();
+    window.setAlwaysOnTop(true,'floating');window.showInactive();window.moveTop();this.sendFrame();
+  }
+  private discardLyricsWindow(){const previous=this.lyrics;this.lyrics=undefined;this.lyricGuard=undefined;this.lyricsReady=false;clearTimeout(this.saveTimer);if(previous&&!previous.isDestroyed())previous.destroy();}
   private reportLyricsError(message:string){this.error=message;if(!this.main.isDestroyed())this.main.webContents.send(IPC_CHANNELS.desktopMusicState,this.state());}
-  private async save(input:DesktopMusicSettings){
+  private async save(input:DesktopMusicSettings,recreateLyrics=false){
     const settings=desktopMusicSettingsSchema.parse({...input,shortcutsEnabled:false}),previous=this.settings;
     const wheelChanged=JSON.stringify(previous.wheel)!==JSON.stringify(settings.wheel);
     if(this.saving)throw new Error('桌面音乐设置正在保存，请稍后重试。');this.saving=true;
@@ -71,7 +78,7 @@ export class DesktopMusic {
       this.reportLyricsError(message);throw new Error(message);
     }finally{this.saving=false;}
     this.settings=settings;this.error=undefined;
-    try{this.updateWindow();}catch{this.reportLyricsError('设置已保存，但桌面歌词窗口无法显示，请重新打开歌词。');}
+    try{if(recreateLyrics)this.discardLyricsWindow();this.updateWindow();if(settings.lyricsVisible&&!previous.lyricsVisible)this.bringLyricsToMainDisplay();}catch{this.reportLyricsError('设置已保存，但桌面歌词窗口无法显示，请重新打开歌词。');}
     const state=this.state();if(!this.main.isDestroyed())this.main.webContents.send(IPC_CHANNELS.desktopMusicState,state);return state;
   }
   private bounds(saved?:Partial<Rectangle>):Rectangle{
@@ -83,18 +90,20 @@ export class DesktopMusic {
   private updateWindow(){
     if(!this.settings.lyricsVisible){this.lyrics?.hide();return;}
     if(!this.lyrics||this.lyrics.isDestroyed()){
-      const window=new BrowserWindow({...this.bounds(this.store.getSetting('music.lyrics-position-v1')),show:false,frame:false,resizable:false,skipTaskbar:true,alwaysOnTop:true,transparent:true,backgroundColor:'#00000000',webPreferences:{preload:join(app.getAppPath(),'dist/preload/lyrics.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,partition:'moyu-lyrics-isolated'}});
+      const window=new BrowserWindow({...this.bounds(this.store.getSetting('music.lyrics-position-v1')),show:false,frame:false,resizable:false,skipTaskbar:true,alwaysOnTop:true,transparent:true,backgroundColor:'#00000000',webPreferences:{preload:join(app.getAppPath(),'dist/preload/lyrics.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,backgroundThrottling:false,partition:'moyu-lyrics-isolated'}});
+      this.lyricsReady=false;
       this.lyricGuard=new IpcGuard(window.webContents.id);
       this.lyrics=window;window.removeMenu();window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',event=>event.preventDefault());window.webContents.on('will-attach-webview',event=>event.preventDefault());
       window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));window.webContents.session.setPermissionCheckHandler(()=>false);
-      window.once('ready-to-show',()=>{this.sendFrame();if(this.settings.lyricsVisible)window.showInactive();});
+      window.once('ready-to-show',()=>{if(this.lyrics!==window||window.isDestroyed())return;this.lyricsReady=true;this.presentLyricsWindow();});
+      window.webContents.on('did-finish-load',()=>{if(this.lyrics===window&&!window.isDestroyed())this.sendFrame();});
       window.on('move',()=>{clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>{if(!window.isDestroyed())this.store.setSetting('music.lyrics-position-v1',window.getBounds());},250);});
       window.on('close',event=>{event.preventDefault();void this.save({...this.settings,lyricsVisible:false}).catch(()=>{});});
-      window.webContents.on('render-process-gone',()=>{if(this.lyrics!==window)return;this.lyrics=undefined;this.lyricGuard=undefined;window.destroy();this.reportLyricsError('桌面歌词显示已中断，请重新打开桌面歌词。');});
+      window.webContents.on('render-process-gone',()=>{if(this.lyrics!==window)return;this.discardLyricsWindow();this.reportLyricsError('桌面歌词显示已中断，请重新打开桌面歌词。');});
       void window.loadFile(join(app.getAppPath(),'dist/renderer/lyrics.html')).catch(()=>{if(this.lyrics!==window||window.isDestroyed())return;this.lyrics=undefined;this.lyricGuard=undefined;window.destroy();this.reportLyricsError('桌面歌词窗口加载失败，请重新打开桌面歌词。');});
     }
-    this.lyrics.setIgnoreMouseEvents(this.settings.lyricsLocked,{forward:true});this.lyrics.setMovable(!this.settings.lyricsLocked);this.lyrics.showInactive();this.sendFrame();
+    this.lyrics.setIgnoreMouseEvents(this.settings.lyricsLocked,{forward:true});this.lyrics.setMovable(!this.settings.lyricsLocked);this.presentLyricsWindow();this.sendFrame();
   }
   private sendFrame(){if(this.lyrics&&!this.lyrics.isDestroyed())this.lyrics.webContents.send(FRAME,{...this.frame,locked:this.settings.lyricsLocked,style:this.settings.lyricsStyle});}
-  dispose(){clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopWheelRecording,IPC_CHANNELS.desktopLyricsRecover,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.lyrics?.destroy();}
+  dispose(){clearTimeout(this.saveTimer);this.wheel.dispose();for(const channel of [IPC_CHANNELS.desktopMusicRead,IPC_CHANNELS.desktopMusicSave,IPC_CHANNELS.desktopWheelRecording,IPC_CHANNELS.desktopLyricsRecover,IPC_CHANNELS.desktopLyricsPublish,ACTION])ipcMain.removeHandler(channel);screen.removeListener('display-removed',this.displayChange);screen.removeListener('display-metrics-changed',this.displayChange);this.discardLyricsWindow();}
 }
