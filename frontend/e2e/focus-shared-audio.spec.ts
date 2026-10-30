@@ -68,7 +68,9 @@ test('real music and ambient stay independent and synchronized across sound and 
   await bar.getByRole('button', { name: '暂停', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).testAudio.sound.settings.ambientTracks[0].status)).toBe('playing');
   await bar.getByRole('button', { name: '静音音乐', exact: true }).click();
-  await expect(bar.getByRole('slider', { name: '音乐音量', exact: true })).toHaveAttribute('aria-valuetext', '32%，已静音');
+  await expect(bar.getByRole('slider', { name: '音乐音量', exact: true })).toHaveAttribute('aria-valuetext', '0%，已静音');
+  await expect(bar.getByRole('slider', { name: '音乐音量', exact: true })).toHaveValue('0');
+  await expect.poll(() => page.evaluate(() => (window as any).testAudio.sound.settings.musicBus.volume)).toBe(.32);
   await page.getByRole('link', { name: '声音', exact: true }).click();
   await globalPlayer.getByRole('button', { name: '展开播放器' }).click();
   await expect(globalPlayer.getByRole('slider', { name: '音乐音量', exact: true })).toHaveValue('0.32');
