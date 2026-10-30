@@ -18,8 +18,8 @@ describe('native desktop lyrics recovery',()=>{
     mock.execute!(command);
     expect(main.restore).toHaveBeenCalledOnce();expect(main.show).toHaveBeenCalledOnce();
     expect(main.moveTop).toHaveBeenCalledOnce();expect(main.focus).toHaveBeenCalledOnce();expect(main.webContents.focus).toHaveBeenCalledOnce();
-    expect(main.show.mock.invocationCallOrder[0]).toBeLessThan(main.moveTop.mock.invocationCallOrder[0]);
-    expect(main.focus.mock.invocationCallOrder[0]).toBeLessThan(main.webContents.focus.mock.invocationCallOrder[0]);
+    expect(main.show.mock.invocationCallOrder[0]!).toBeLessThan(main.moveTop.mock.invocationCallOrder[0]!);
+    expect(main.focus.mock.invocationCallOrder[0]!).toBeLessThan(main.webContents.focus.mock.invocationCallOrder[0]!);
     expect(send).toHaveBeenCalledWith(IPC_CHANNELS.desktopWheelCommand,command);music.dispose();
   });
   it.each(['play-pause','next','previous','mute'])('wheel %s keeps background playback controls from stealing focus',command=>{
