@@ -38,6 +38,10 @@ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:10
     const headerParts=[stage.locator('.brand'),stage.locator('.mode-switch'),stage.locator('.top-tools'),chrome];
     const boxes=[];
     for(const part of headerParts){await expect(part).toBeInViewport();boxes.push((await part.boundingBox())!);}
+    const modeBox=boxes[1];
+    expect(Math.abs(modeBox.x+modeBox.width/2-viewport.width/2)).toBeLessThan(0.1);
+    const optionBox=(await stage.getByRole('combobox',{name:'背景',exact:true}).boundingBox())!;
+    expect(optionBox.y-(modeBox.y+modeBox.height)).toBeGreaterThanOrEqual(18);
     for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
       const a=boxes[i],b=boxes[j];
       expect(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y,`header parts ${i}/${j} overlap`).toBe(false);
