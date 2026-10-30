@@ -1,10 +1,11 @@
 <template>
-  <section ref="stage" class="listening-stage" :class="[`listening-stage--${tone}`,`listening-stage--${composition}`,{'is-pure':pure}]" aria-label="完整音乐视觉模式" @keydown="onKeydown" @click="closeAccountOutside" @load.capture="captureCover">
+  <section ref="stage" class="listening-stage" :class="[`listening-stage--${tone}`,`listening-stage--${composition}`,{'is-pure':pure,'listening-stage--native':desktop}]" aria-label="完整音乐视觉模式" @keydown="onKeydown" @click="closeAccountOutside" @load.capture="captureCover">
     <div class="ambient" aria-hidden="true"></div><StageBackgroundCanvas ref="backgroundCanvas" :tone="tone" :preferences="preferences" :playing="player.playback.status==='playing' && !player.buffering" :position-ms="player.playback.positionMs" :ambient-playing="sound.settings.ambientTracks.some(t=>t.status==='playing')" :reduced="shell.motionReduced||sound.lowPerformance" :pure="composition==='visual'" :cover-key="track?.id||''" @signal="signalState=$event"/><div class="grain" aria-hidden="true"></div>
-    <header class="topbar" :inert="pure||undefined">
-      <button ref="returnButton" class="brand" type="button" aria-label="返回声音" title="返回声音" @click="$emit('close')"><BrandMark class="brand-mark"/>墨屿<span class="crumb">听歌舞台</span></button>
-      <nav class="mode-switch" role="tablist" aria-label="舞台布局"><button v-for="item in compositions" :key="item.id" type="button" role="tab" :aria-selected="composition===item.id" :aria-pressed="composition===item.id" :tabindex="composition===item.id?0:-1" @click="composition=item.id" @keydown="moveMode($event)">{{ item.label }}</button></nav>
-      <div class="top-tools"><button ref="queueButton" class="icon-btn" aria-label="播放队列" title="播放队列" @click="openMotionDialog(queueDialog)"><AppIcon name="list"/></button><button ref="settingsButton" class="icon-btn" aria-label="视觉设置" title="舞台设置" @click="openSettings"><AppIcon name="settings"/></button><button class="account-btn" :aria-expanded="accountOpen" aria-label="我的" @click.stop="accountOpen=!accountOpen"><span class="account-dot">墨</span>我的<AppIcon name="chevronDown"/></button></div>
+    <header class="topbar">
+      <button ref="returnButton" :inert="pure||undefined" class="brand" type="button" aria-label="返回声音" title="返回声音" @click="$emit('close')"><BrandMark class="brand-mark"/>墨屿<span class="crumb">听歌舞台</span></button>
+      <nav :inert="pure||undefined" class="mode-switch" role="tablist" aria-label="舞台布局"><button v-for="item in compositions" :key="item.id" type="button" role="tab" :aria-selected="composition===item.id" :aria-pressed="composition===item.id" :tabindex="composition===item.id?0:-1" @click="composition=item.id" @keydown="moveMode($event)">{{ item.label }}</button></nav>
+      <div :inert="pure||undefined" class="top-tools"><button ref="queueButton" class="icon-btn" aria-label="播放队列" title="播放队列" @click="openMotionDialog(queueDialog)"><AppIcon name="list"/></button><button ref="settingsButton" class="icon-btn" aria-label="视觉设置" title="舞台设置" @click="openSettings"><AppIcon name="settings"/></button><button class="account-btn" :aria-expanded="accountOpen" aria-label="我的" @click.stop="accountOpen=!accountOpen"><span class="account-dot">墨</span>我的<AppIcon name="chevronDown"/></button></div>
+      <AppTitlebar v-if="desktop" integrated />
     </header>
     <aside v-if="accountOpen" class="account-menu" aria-label="我的菜单"><button v-if="desktop" type="button" @click="openClientSettings"><AppIcon name="settings"/>客户端设置</button><button v-if="desktop" type="button" @click="toggleLyrics"><AppIcon name="music"/>显示／隐藏桌面歌词</button><button type="button" @click="$emit('close')">返回声音</button></aside>
     <div class="stage-options" :inert="pure||undefined"><span class="option-label">歌词样式</span><AppSelect aria-label="歌词样式" :disabled="composition==='visual'" :model-value="preferences.lyricStyle" @update:model-value="setLyricStyle"><option v-for="[id,label] in STAGE_LYRICS" :key="id" :value="id">{{label}}</option></AppSelect><span class="option-label">背景</span><AppSelect aria-label="背景" :model-value="preferences.background" @update:model-value="setMode"><option v-for="[id,label] in STAGE_BACKGROUNDS" :key="id" :value="id">{{label}}</option></AppSelect></div>
@@ -29,6 +30,7 @@
 import AppSelect from '../../components/controls/AppSelect.vue';
 import AppIcon from '../../components/icons/AppIcon.vue';
 import BrandMark from '../../components/icons/BrandMark.vue';
+import AppTitlebar from '../../components/window/AppTitlebar.vue';
 import PlayerQueueList from '../../components/player/PlayerQueueList.vue';
 import VolumeControl from '../../components/sound/VolumeControl.vue';
 import {useQueueStore} from '../../stores/queue';

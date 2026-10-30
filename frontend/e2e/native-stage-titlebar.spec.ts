@@ -27,27 +27,38 @@ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:10
     const stage=page.locator('.listening-stage');
     await expect(stage).toBeVisible();
     await expect(page.locator('#moyu-startup')).toHaveCount(0);
-    const chrome=page.locator('.desktop-shell > .window-chrome');
+    await expect(page.locator('.desktop-shell > .window-chrome')).toHaveCount(0);
+    const chrome=stage.locator('.topbar > .window-chrome');
     const controlBox=(await chrome.getByRole('group',{name:'窗口控制'}).boundingBox())!;
     // A 44px button plus the group's two borders must not overflow the
     // titlebar or be clipped against the native window's rounded top edge.
-    expect(controlBox.y).toBe(8);
-    expect(controlBox.x+controlBox.width).toBe(viewport.width-8);
+    expect(controlBox.y).toBeGreaterThanOrEqual(8);
+    expect(controlBox.x+controlBox.width).toBe(viewport.width-(viewport.width<=700?12:8));
     expect(controlBox.height).toBe(46);
+    const headerParts=[stage.locator('.brand'),stage.locator('.mode-switch'),stage.locator('.top-tools'),chrome];
+    const boxes=[];
+    for(const part of headerParts){await expect(part).toBeInViewport();boxes.push((await part.boundingBox())!);}
+    for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+      const a=boxes[i],b=boxes[j];
+      expect(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y,`header parts ${i}/${j} overlap`).toBe(false);
+    }
+    if(viewport.width>1000){
+      const center=controlBox.y+controlBox.height/2;
+      for(const box of boxes)expect(Math.abs(box.y+box.height/2-center)).toBeLessThan(0.1);
+    }
     const metrics=await page.evaluate(()=>{
       const stage=document.querySelector('.listening-stage')!;
       const background=stage.querySelector('.parity-backgrounds')!;
-      const chrome=document.querySelector('.desktop-shell > .window-chrome')!;
+      const chrome=stage.querySelector('.window-chrome')!;
       const topbar=stage.querySelector('.topbar')!;
       return {stageY:stage.getBoundingClientRect().y,backgroundY:background.getBoundingClientRect().y,
-        chromeBottom:chrome.getBoundingClientRect().bottom,contentY:topbar.getBoundingClientRect().y,
+        chromeBottom:chrome.getBoundingClientRect().bottom,
         chromeBackground:getComputedStyle(chrome).backgroundColor,
-        drag:getComputedStyle(chrome).getPropertyValue('-webkit-app-region'),
+        drag:getComputedStyle(topbar).getPropertyValue('-webkit-app-region'),
         noDrag:getComputedStyle(chrome.querySelector('.window-chrome__controls')!).getPropertyValue('-webkit-app-region'),
         overflow:document.documentElement.scrollWidth>innerWidth};
     });
     expect(metrics.stageY).toBe(0);expect(metrics.backgroundY).toBe(0);
-    expect(metrics.contentY).toBeGreaterThanOrEqual(metrics.chromeBottom);
     expect(metrics.chromeBackground).toBe('rgba(0, 0, 0, 0)');
     expect(metrics.drag).toBe('drag');expect(metrics.noDrag).toBe('no-drag');expect(metrics.overflow).toBe(false);
     for(const [name,flag] of [['最小化窗口','__stageMinimized'],['最大化窗口','__stageMaximized'],['关闭窗口','__stageClosed']]){
@@ -64,6 +75,14 @@ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:10
     const menu=stage.getByLabel('我的菜单');await expect(menu).toBeVisible();
     expect((await menu.boundingBox())!.y).toBeGreaterThanOrEqual(metrics.chromeBottom);
     await page.screenshot({path:info.outputPath(`stage-titlebar-${viewport.width}.png`)});
+    await stage.getByRole('button',{name:'我的',exact:true}).click();
+    await stage.getByRole('button',{name:'纯净模式',exact:true}).click();
+    await expect(stage.getByRole('button',{name:'显示控制',exact:true})).toBeFocused();
+    await expect(stage.getByRole('button',{name:'返回声音',exact:true})).toBeHidden();
+    await page.evaluate(()=>{(window as any).__stageMinimized=false;});
+    await chrome.getByRole('button',{name:'最小化窗口',exact:true}).click();
+    expect(await page.evaluate(()=>(window as any).__stageMinimized)).toBe(true);
+    await stage.getByRole('button',{name:'显示控制',exact:true}).click();
     await stage.getByRole('button',{name:'返回声音',exact:true}).first().click();
     await expect(stage).toHaveCount(0);
     await expect(page.locator('.app-chrome--desktop')).toBeVisible();

@@ -17,7 +17,7 @@
       <div class="desktop-shell__shade" />
     </div>
     <a class="desktop-shell__skip" href="#main-stage">跳到主要内容</a>
-    <AppTitlebar v-if="isDesktop && (shell.immersive||shell.listeningStage)" floating />
+    <AppTitlebar v-if="isDesktop && shell.immersive && !shell.listeningStage" floating />
     <AppRail v-show="!shell.immersive&&!shell.listeningStage"
       ref="rail"
       :drawer-open="shell.drawer !== null"
@@ -299,11 +299,9 @@ watch(
 @media(max-width:800px){
  .desktop-shell__player-slot{padding:6px 8px}.desktop-shell__player-slot :deep(.player){min-height:56px}
 }
-.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.topbar){display:flex}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
-/* Paint the stage behind native controls; keep content below the drag region. */
-.desktop-shell--native.desktop-shell--listening > .window-chrome{position:absolute;inset:8px 8px auto 0;height:46px;z-index:var(--sr-layer-rail)}
-.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.listening-stage){box-sizing:border-box;padding-top:60px}
-.desktop-shell--native.desktop-shell--listening .desktop-shell__stage :deep(.account-menu){top:134px}
+.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
+.desktop-shell--listening .desktop-shell__stage :deep(.listening-stage .topbar){display:flex}
+.desktop-shell--listening .desktop-shell__stage :deep(.listening-stage--native .topbar){display:grid}
 </style>
 
 <style>
@@ -316,5 +314,5 @@ watch(
 .manual-update-dialog__actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
 .manual-update-dialog__actions button{min-height:42px;padding:0 16px;border:1px solid var(--sr-color-line);border-radius:12px;background:transparent;color:inherit;font:inherit;cursor:pointer}
 .manual-update-dialog__actions .manual-update-dialog__primary{background:var(--sr-color-accent);color:var(--sr-color-accent-ink);border-color:transparent;font-weight:650}
-.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.topbar){display:flex}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
+.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--native.desktop-shell--listening{grid-template-rows:minmax(0,1fr)}.desktop-shell--listening .desktop-shell__stage :deep(.sound-page){padding:0}.desktop-shell--listening .desktop-shell__backdrop{visibility:hidden}
 </style>
