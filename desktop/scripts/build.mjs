@@ -104,3 +104,5 @@ await build({...common,entryPoints:[resolve(desktopRoot,'src/preload/lyrics.ts')
 for(const name of ['lyrics.html','lyrics.css','lyrics.js'])await cp(resolve(desktopRoot,'src/renderer',name),resolve(distRoot,'renderer',name));
 await build({...common,entryPoints:[resolve(desktopRoot,'src/preload/wheel.ts')],outfile:resolve(distRoot,'preload/wheel.cjs'),format:'cjs'});
 for(const name of ['wheel.html','wheel.css','wheel.js'])await cp(resolve(desktopRoot,'src/renderer',name),resolve(distRoot,'renderer',name));
+// Local-only script; preserve GSAP's upstream license header in the asset.
+await cp(fileURLToPath(import.meta.resolve('gsap/dist/gsap.min.js')),resolve(distRoot,'renderer/gsap.min.js'));

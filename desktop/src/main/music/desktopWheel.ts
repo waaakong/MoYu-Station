@@ -6,7 +6,7 @@ import {metadataEnvironment} from '../../audio/library/metadataProcess';
 import {nativeArguments,parseWheelMessage,wheelSettingsSchema,wheelSlot} from './wheelProtocol';
 export class DesktopWheel {
   private helper?:ChildProcessWithoutNullStreams;private window?:BrowserWindow;private heartbeat?:NodeJS.Timeout;
-  private settings?:DesktopWheelSettings;private active=0;private lastSequence=0;private center={x:0,y:0};private ready=false;
+  private settings?:DesktopWheelSettings;private active=0;private lastSequence=0;private frameSequence=0;private center={x:0,y:0};private ready=false;
   private disposed=false;private pending=new Set<ChildProcessWithoutNullStreams>();private origin={x:0,y:0};private moved=false;
   private recordingUntil=0;
   setRecording(active:boolean){this.cancel();this.recordingUntil=active?Date.now()+30000:0;}
@@ -52,7 +52,7 @@ export class DesktopWheel {
     if(Date.now()<this.recordingUntil){this.cancel();return;}
     const event=parseWheelMessage(line);if(!event||!this.settings||!this.ready||!this.window||this.window.isDestroyed())return;
     if(event.type==='OPEN'){
-      if(event.sequence<=this.lastSequence)return;this.lastSequence=event.sequence;this.active=event.sequence;
+      if(event.sequence<=this.lastSequence)return;this.lastSequence=event.sequence;this.active=event.sequence;this.frameSequence++;
       const point=screen.screenToDipPoint({x:event.x,y:event.y}),area=screen.getDisplayNearestPoint(point).workArea;
       this.origin=point;this.moved=false;
       const x=Math.round(Math.max(area.x,Math.min(area.x+area.width-480,point.x-240))),y=Math.round(Math.max(area.y,Math.min(area.y+area.height-480,point.y-240)));
@@ -65,7 +65,7 @@ export class DesktopWheel {
     if(event.type==='MOVE')this.frame(slot);
     if(event.type==='RELEASE'){const command=slot<0?undefined:this.settings.slots[slot];this.cancel();if(command)this.execute(command);}
   }
-  private frame(selected:number){this.window?.webContents.send('desktop-wheel:frame',{selected,slots:this.settings?.slots});}
+  private frame(selected:number){this.window?.webContents.send('desktop-wheel:frame',{sequence:this.frameSequence,selected,slots:this.settings?.slots});}
   cancel(){this.active=0;if(this.window&&!this.window.isDestroyed())this.window.hide();}
   private stop(){this.cancel();clearInterval(this.heartbeat);const helper=this.helper;this.helper=undefined;helper?.stdin.end();helper?.kill();}
   dispose(){this.disposed=true;for(const child of this.pending)child.kill();this.pending.clear();this.stop();this.window?.destroy();this.window=undefined;this.ready=false;screen.removeListener('display-removed',this.displayChanged);screen.removeListener('display-metrics-changed',this.displayChanged);}
