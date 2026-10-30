@@ -1,3 +1,5 @@
+import '../../src/styles/tokens.css';
+import '../../src/styles/glass.css';
 import {createApp,h,ref} from 'vue';
 import {createPinia,setActivePinia} from 'pinia';
 import type {DesktopMusicSettings,StudyRoomDesktopBridge} from '@studyroom/contracts';
@@ -5,6 +7,7 @@ import previewCover from './assets/approved-stage-cover.jpg';
 import ListeningStage from '../../src/pages/sound/ListeningStage.vue';
 import AppSelect from '../../src/components/controls/AppSelect.vue';
 import BrandMark from '../../src/components/icons/BrandMark.vue';
+import AppIcon from '../../src/components/icons/AppIcon.vue';
 import {usePlayerStore} from '../../src/stores/player';
 import {useQueueStore} from '../../src/stores/queue';
 import {useSoundStore,sanitizeSoundSettings} from '../../src/stores/sound';
@@ -48,4 +51,4 @@ createApp({render:()=>h('div',{class:{'reference-view':referenceView}},[
     button(opened.value?'关闭舞台':'重新打开舞台',()=>{opened.value=!opened.value;}),
     h('output',`${note.value} ／ 歌词读取${reads.value}次`)
   ]),opened.value?h('div',{class:'stage-host'},h(ListeningStage,{onClose:()=>{opened.value=false;}})):null
-])}).use(pinia).component('AppSelect',AppSelect).component('BrandMark',BrandMark).mount('#app');
+])}).use(pinia).component('AppSelect',AppSelect).component('BrandMark',BrandMark).component('AppIcon',AppIcon).mount('#app');
