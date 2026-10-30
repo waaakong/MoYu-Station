@@ -8,7 +8,7 @@ export function createWheelFocusDiagnostics():WheelFocusTrace|undefined{
   if(env.STUDYROOM_WHEEL_FOCUS_DIAGNOSTICS!=='1'||!basename(execPath).includes('Provider Experimental'))return;
   const directory=join(app.getPath('userData'),'diagnostics');
   const file=join(directory,`wheel-focus-${Date.now()}-${pid}.jsonl`);
-  const allowed=new Set(['command','before','after','settled','transfer','foreground','gesture']);
+  const allowed=new Set(['command','before','after','settled','transfer','foreground','gesture','activation']);
   const keys=new Set(['sequence','command','visible','minimized','focused','contentFocused','granted','error','owned','topmost','controlHeld','altHeld']);
   const start=Date.now();let count=0;
   return(event,fields)=>{

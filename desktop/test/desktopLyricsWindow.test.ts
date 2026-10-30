@@ -1,22 +1,22 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {DEFAULT_DESKTOP_MUSIC} from '../src/main/music/shortcuts';
-const mock=vi.hoisted(()=>({windows:[] as any[],execute:undefined as undefined|((command:string)=>void),configure:vi.fn(async()=>{}),handlers:new Map<string,Function>(),load:vi.fn(async()=>{}),recording:vi.fn(),mediaRegister:vi.fn(()=>true)}));
+const mock=vi.hoisted(()=>({windows:[] as any[],execute:undefined as undefined|((command:string)=>void),configure:vi.fn(async()=>{}),handlers:new Map<string,Function>(),load:vi.fn(async()=>{}),recording:vi.fn(),mediaRegister:vi.fn(()=>true),activation:vi.fn()}));
 vi.mock('electron',()=>({app:{getAppPath:()=>'/app'},globalShortcut:{register:mock.mediaRegister,unregister:()=>{}},ipcMain:{handle:(key:string,fn:Function)=>mock.handlers.set(key,fn),removeHandler:(key:string)=>mock.handlers.delete(key)},screen:{getAllDisplays:()=>[{workArea:{x:-1920,y:0,width:1920,height:1080}},{workArea:{x:0,y:0,width:1440,height:900}}],getDisplayMatching:()=>({workArea:{x:0,y:0,width:1440,height:900}}),getPrimaryDisplay:()=>({workArea:{x:0,y:0,width:1440,height:900}}),on:()=>{},removeListener:()=>{}},BrowserWindow:class{
   destroyed=false;events=new Map<string,Function>();bounds:any;webEvents=new Map<string,Function>();
   webContents={id:2,send:vi.fn(),setWindowOpenHandler:()=>{},on:(key:string,fn:Function)=>this.webEvents.set(key,fn),session:{setPermissionRequestHandler:()=>{},setPermissionCheckHandler:()=>{}}};
   constructor(options:any){this.bounds=options;mock.windows.push(this);}
   isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}hide=vi.fn();showInactive=vi.fn();isMinimized=vi.fn(()=>false);restore=vi.fn();setAlwaysOnTop=vi.fn();moveTop=vi.fn();setBounds(value:any){this.bounds=value;}getBounds(){return this.bounds;}setIgnoreMouseEvents(){}setMovable(){}removeMenu(){}once(key:string,fn:Function){this.events.set(key,fn);}on(key:string,fn:Function){this.events.set(key,fn);}loadFile(){return mock.load();}
 }}));
-vi.mock('../src/main/music/desktopWheel',()=>({DesktopWheel:class{constructor(execute:any){mock.execute=execute;}configure=mock.configure;setRecording=mock.recording;dispose(){}}}));
+vi.mock('../src/main/music/desktopWheel',()=>({DesktopWheel:class{constructor(execute:any){mock.execute=execute;}configure=mock.configure;setRecording=mock.recording;requestMainActivation=mock.activation;dispose(){}}}));
 import {DesktopMusic} from '../src/main/music/desktopMusic';
 import {IPC_CHANNELS} from '@studyroom/contracts';
 describe('native desktop lyrics recovery',()=>{
-  beforeEach(()=>{mock.windows=[];mock.handlers.clear();mock.mediaRegister.mockClear();mock.configure.mockReset().mockResolvedValue(undefined);mock.load.mockReset().mockResolvedValue(undefined);});
+  beforeEach(()=>{mock.windows=[];mock.activation.mockClear();mock.handlers.clear();mock.mediaRegister.mockClear();mock.configure.mockReset().mockResolvedValue(undefined);mock.load.mockReset().mockResolvedValue(undefined);});
   function setup(saved?:unknown){const send=vi.fn(),store={getSetting:vi.fn((key:string):unknown=>key==='music.desktop-v1'?saved:undefined),setSetting:vi.fn()},events=new Map<string,Function>(),main={events,on:(name:string,fn:Function)=>events.set(name,fn),removeListener:(name:string)=>events.delete(name),focus:vi.fn(),moveTop:vi.fn(),show:vi.fn(),restore:vi.fn(),isMinimized:vi.fn(()=>false),isVisible:vi.fn(()=>true),isFocused:vi.fn(()=>true),webContents:{id:1,send,focus:vi.fn(),on:()=>{}},isDestroyed:vi.fn(()=>false),getBounds:()=>({x:0,y:0,width:1440,height:900})};return {music:new DesktopMusic(main as any,store as any),send,store,main};}
   it.each(['sound','space','focus'])('wheel %s restores and raises the main window and focuses its page',async command=>{
     const {music,main,send}=setup();main.isMinimized.mockReturnValueOnce(true);
     mock.execute!(command);
-    expect(main.restore).toHaveBeenCalledOnce();expect(main.show).toHaveBeenCalledOnce();
+    expect(mock.activation).toHaveBeenCalledOnce();expect(main.restore).toHaveBeenCalledOnce();expect(main.show).toHaveBeenCalledOnce();
     expect(main.moveTop).toHaveBeenCalledOnce();expect(main.focus).toHaveBeenCalledOnce();expect(main.webContents.focus).toHaveBeenCalledOnce();
     expect(main.show.mock.invocationCallOrder[0]!).toBeLessThan(main.moveTop.mock.invocationCallOrder[0]!);
     expect(main.focus.mock.invocationCallOrder[0]!).toBeLessThan(main.webContents.focus.mock.invocationCallOrder[0]!);
@@ -24,7 +24,7 @@ describe('native desktop lyrics recovery',()=>{
   });
   it.each(['play-pause','next','previous','mute'])('wheel %s keeps background playback controls from stealing focus',command=>{
     const {music,main}=setup();mock.execute!(command);
-    expect(main.show).not.toHaveBeenCalled();expect(main.moveTop).not.toHaveBeenCalled();expect(main.focus).not.toHaveBeenCalled();expect(main.webContents.focus).not.toHaveBeenCalled();music.dispose();
+    expect(mock.activation).not.toHaveBeenCalled();expect(main.show).not.toHaveBeenCalled();expect(main.moveTop).not.toHaveBeenCalled();expect(main.focus).not.toHaveBeenCalled();expect(main.webContents.focus).not.toHaveBeenCalled();music.dispose();
   });
   it('reconciles a delayed activation only once and cancels a disposed request',async()=>{
     const {music,main}=setup();main.isFocused.mockReturnValue(false);mock.execute!('sound');

@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {wheelSettingsSchema,DEFAULT_WHEEL,nativeArguments,parseWheelMessage,parseWheelFocusTrace,wheelSlot} from '../src/main/music/wheelProtocol';
+import {wheelSettingsSchema,DEFAULT_WHEEL,nativeArguments,nativeWindowArgument,parseWheelMessage,parseWheelFocusTrace,wheelSlot} from '../src/main/music/wheelProtocol';
 describe('finite global wheel protocol',()=>{
   it('only permits fixed modifiers and known finite commands',()=>{
     expect(DEFAULT_WHEEL.accelerator).toBe('Control+Alt');
@@ -22,7 +22,13 @@ describe('finite global wheel protocol',()=>{
     expect(parseWheelFocusTrace('TRANSFER 12 0 5')).toEqual({kind:'TRANSFER',sequence:12,flag:false,detail:5});
     expect(parseWheelFocusTrace('FOREGROUND 12 1 0')).toEqual({kind:'FOREGROUND',sequence:12,flag:true,detail:0});
     expect(parseWheelFocusTrace('GESTURE 12 0 1')).toEqual({kind:'GESTURE',sequence:12,flag:false,detail:1});
+    expect(parseWheelFocusTrace('ACTIVATION 12 1 0')).toEqual({kind:'ACTIVATION',sequence:12,flag:true,detail:0});
     expect(parseWheelMessage('TRANSFER 12 0 5')).toBeUndefined();
     for(const line of ['TRANSFER 0 1 0','TRANSFER 1 2 0','TRANSFER 1 0 4294967296','FOREGROUND 1 0 2','FOREGROUND 1 1 0 title','OPEN 1 0 0'])expect(parseWheelFocusTrace(line)).toBeUndefined();
+  });
+  it('serializes only a nonzero native main-window handle',()=>{
+    const handle=Buffer.alloc(8);handle.writeBigUInt64LE(0x123456789n);expect(nativeWindowArgument(handle)).toBe('4886718345');
+    const short=Buffer.alloc(4);short.writeUInt32LE(12345);expect(nativeWindowArgument(short)).toBe('12345');
+    for(const invalid of [Buffer.alloc(0),Buffer.alloc(7),Buffer.alloc(9),Buffer.alloc(8)])expect(()=>nativeWindowArgument(invalid)).toThrow('WHEEL_MAIN_WINDOW_HANDLE_INVALID');
   });
 });

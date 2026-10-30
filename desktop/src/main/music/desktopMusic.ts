@@ -33,7 +33,7 @@ export class DesktopMusic {
       if(command==='lyrics'){void this.toggleLyrics().catch(()=>{});return;}
       if(['sound','space','focus'].includes(command))this.activateMain();
       if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.desktopWheelCommand,command);
-    },message=>{this.error=message;if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.desktopMusicState,this.state());},this.focusTrace);
+    },message=>{this.error=message;if(!main.isDestroyed())main.webContents.send(IPC_CHANNELS.desktopMusicState,this.state());},this.focusTrace,()=>main.getNativeWindowHandle(),success=>{if(success&&!main.isDestroyed())main.webContents.focus();});
     this.wheelReady=this.wheel.configure(this.settings.wheel!).catch(error=>{this.error=error instanceof Error?error.message:'轮盘不可用';});
     ipcMain.handle(IPC_CHANNELS.desktopMusicRead,event=>this.guard.invoke(IPC_CHANNELS.desktopMusicRead,event,()=>this.state()));
     ipcMain.handle(IPC_CHANNELS.desktopMusicSave,(event,value)=>this.guard.invoke(IPC_CHANNELS.desktopMusicSave,event,()=>this.save(desktopMusicSettingsSchema.parse(value))));
@@ -67,6 +67,7 @@ export class DesktopMusic {
     this.traceMain('before');
     if(main.isMinimized())main.restore();
     main.show();main.moveTop();main.focus();main.webContents.focus();
+    this.wheel.requestMainActivation();
     this.traceMain('after');
     if(this.focusTrace){clearTimeout(this.diagnosticTimer);this.diagnosticTimer=setTimeout(()=>{this.traceMain('settled');this.wheel.probeForeground();},100);}
     // Restore/show and a global key-up can complete after the first focus call.

@@ -13,9 +13,15 @@ export function parseWheelMessage(line:string){
   return match?{type:match[1]!,sequence:Number(match[2]),x:Number(match[3]),y:Number(match[4])}:undefined;
 }
 export function parseWheelFocusTrace(line:string){
-  const match=/^(TRANSFER|FOREGROUND|GESTURE) ([1-9]\d{0,8}) ([01]) (\d{1,10})$/.exec(line);
+  const match=/^(TRANSFER|FOREGROUND|GESTURE|ACTIVATION) ([1-9]\d{0,8}) ([01]) (\d{1,10})$/.exec(line);
   if(!match)return;
-  const detail=Number(match[4]);if(detail>0xffffffff||match[1]!=='TRANSFER'&&detail>1)return;
+  const detail=Number(match[4]);if(detail>0xffffffff||['FOREGROUND','GESTURE'].includes(match[1]!)&&detail>1)return;
   return {kind:match[1]!,sequence:Number(match[2]),flag:match[3]==='1',detail};
+}
+export function nativeWindowArgument(handle:Buffer){
+  if(handle.length!==4&&handle.length!==8)throw new Error('WHEEL_MAIN_WINDOW_HANDLE_INVALID');
+  const value=handle.length===8?handle.readBigUInt64LE():BigInt(handle.readUInt32LE());
+  if(value===0n)throw new Error('WHEEL_MAIN_WINDOW_HANDLE_INVALID');
+  return value.toString(10);
 }
 export function wheelSlot(dx:number,dy:number){if(Math.hypot(dx,dy)<66)return -1;return Math.round((Math.atan2(dy,dx)*180/Math.PI+90+360)%360/45)%8;}

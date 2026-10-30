@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cwchar>
 #include <thread>
+#include <cstdint>
 
 // No ordinary key data leaves this process. Only the configured hold gesture is observed.
 static HHOOK keyboardHook=nullptr,mouseHook=nullptr;
@@ -14,9 +15,13 @@ static unsigned long sequence=0;static HWND foreground=nullptr;
 static DWORD parentProcess=0;static bool pendingRelease=false;static POINT releasePoint{};
 static constexpr UINT finishMessage=WM_APP+1;
 static constexpr UINT probeMessage=WM_APP+2;
+static constexpr UINT activateMessage=WM_APP+3;
+static HWND mainWindow=nullptr;static bool activationAvailable=false,focusPending=false;
+static ULONGLONG activationDeadline=0;
+static bool pendingOutcome=false;static unsigned long outcomeSequence=0;static DWORD activationError=0;static ULONGLONG outcomeAt=0;
 static std::atomic<ULONGLONG> heartbeat{0};static ULONGLONG lastMove=0;
 static void emit(const char* type){POINT p{};GetCursorPos(&p);std::printf("%s %lu %ld %ld\n",type,sequence,p.x,p.y);std::fflush(stdout);}
-static void cancel(){if(active||pendingRelease){active=false;pendingRelease=false;emit("CANCEL");}}
+static void cancel(){activationAvailable=false;focusPending=false;if(active||pendingRelease){active=false;pendingRelease=false;emit("CANCEL");}}
 static bool down(int key){return (GetAsyncKeyState(key)&0x8000)!=0;}
 static bool combination(){return down(VK_CONTROL)&&down(VK_MENU)&&(!(modifiers&MOD_SHIFT)||down(VK_SHIFT))&&!down(VK_LWIN)&&!down(VK_RWIN);}
 static bool fullscreen(){
@@ -29,7 +34,7 @@ static bool control(UINT key){return key==VK_CONTROL||key==VK_LCONTROL||key==VK_
 static bool alt(UINT key){return key==VK_MENU||key==VK_LMENU||key==VK_RMENU;}
 static bool shift(UINT key){return key==VK_SHIFT||key==VK_LSHIFT||key==VK_RSHIFT;}
 static bool permitted(){return GetTickCount64()-heartbeat.load()<2500&&(allowFullscreen||!fullscreen());}
-static void begin(){if(pendingRelease)cancel();held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");}
+static void begin(){pendingOutcome=false;activationAvailable=false;focusPending=false;if(pendingRelease)cancel();held=true;active=true;foreground=GetForegroundWindow();++sequence;emit("OPEN");}
 static void finish(){
   if(!active)return;
   if(GetForegroundWindow()!=foreground||!permitted())cancel();
@@ -47,11 +52,46 @@ static bool ownsParent(DWORD expected){
   if(Process32FirstW(snapshot,&entry))do{if(entry.th32ProcessID==GetCurrentProcessId()){found=entry.th32ParentProcessID==expected;break;}}while(Process32NextW(snapshot,&entry));
   CloseHandle(snapshot);return found;
 }
+static bool ownsMainWindow(){DWORD owner=0;GetWindowThreadProcessId(mainWindow,&owner);return IsWindow(mainWindow)&&owner==parentProcess&&GetAncestor(mainWindow,GA_ROOT)==mainWindow;}
+struct InputLink{
+  DWORD from,to;bool attached=false;DWORD error=0;
+  InputLink(DWORD current,DWORD target):from(current),to(target){if(target&&current!=target){SetLastError(0);attached=AttachThreadInput(current,target,TRUE)!=0;if(!attached)error=GetLastError();}}
+  ~InputLink(){if(attached)AttachThreadInput(from,to,FALSE);}
+};
+static void activateMain(){
+  if(!focusPending)return;
+  if(!activationAvailable||GetTickCount64()>activationDeadline||!permitted()||!ownsMainWindow()||!IsWindowVisible(mainWindow)||IsIconic(mainWindow)){focusPending=false;activationAvailable=false;return;}
+  const HWND current=GetForegroundWindow();DWORD currentOwner=0;
+  const DWORD foregroundThread=GetWindowThreadProcessId(current,&currentOwner);
+  if(current!=foreground&&currentOwner!=parentProcess){focusPending=false;activationAvailable=false;return;}
+  // Input-queue attachment resets key state. Never do it while the user's
+  // gesture is still held; the key-up hook/timer will retry within this intent.
+  if(down(VK_CONTROL)||down(VK_MENU)||down(VK_SHIFT)||(trigger&&down(trigger)))return;
+  focusPending=false;activationAvailable=false;DWORD error=0;
+  if(current!=mainWindow&&!SetForegroundWindow(mainWindow)){
+    if(!IsHungAppWindow(mainWindow)&&(!current||!IsHungAppWindow(current))){
+      const DWORD self=GetCurrentThreadId(),targetThread=GetWindowThreadProcessId(mainWindow,nullptr);
+      InputLink foregroundLink(self,foregroundThread);
+      InputLink targetLink(self,targetThread==foregroundThread?0:targetThread);
+      SetLastError(0);
+      if(foregroundLink.attached&&(!targetThread||targetThread==foregroundThread||targetLink.attached)){
+        BringWindowToTop(mainWindow);SetLastError(0);const BOOL activated=SetForegroundWindow(mainWindow);error=activated?0:GetLastError();SetFocus(mainWindow);
+      }else error=foregroundLink.error?foregroundLink.error:targetLink.error;
+    }else error=ERROR_TIMEOUT;
+  }
+  // Foreground activation can cross input queues asynchronously. Observe its
+  // result on the existing timer; do not confuse API return with actual focus.
+  pendingOutcome=true;outcomeSequence=sequence;activationError=error;outcomeAt=GetTickCount64()+50;
+}
 static LRESULT CALLBACK keyboard(int code,WPARAM msg,LPARAM data){
   if(code<0)return CallNextHookEx(keyboardHook,code,msg,data);
   const auto* e=reinterpret_cast<KBDLLHOOKSTRUCT*>(data);
   if(e->flags&LLKHF_INJECTED)return CallNextHookEx(keyboardHook,code,msg,data);
   const bool press=msg==WM_KEYDOWN||msg==WM_SYSKEYDOWN,release=msg==WM_KEYUP||msg==WM_SYSKEYUP;
+  if(activationAvailable){
+    if(press&&!control(e->vkCode)&&!alt(e->vkCode)&&!shift(e->vkCode)){focusPending=false;activationAvailable=false;}
+    else if(release)PostThreadMessageW(ownerThread,activateMessage,sequence,0);
+  }
   if(blockEscape&&e->vkCode==VK_ESCAPE){if(release)blockEscape=false;return 1;}
   if(active&&press&&e->vkCode==VK_ESCAPE){blockEscape=true;cancel();return 1;}
   if(trigger==0){
@@ -80,6 +120,7 @@ static LRESULT CALLBACK keyboard(int code,WPARAM msg,LPARAM data){
 }
 static LRESULT CALLBACK mouse(int code,WPARAM msg,LPARAM data){
   if(code>=0){
+    if(activationAvailable&&(msg==WM_LBUTTONDOWN||msg==WM_RBUTTONDOWN||msg==WM_MBUTTONDOWN)){focusPending=false;activationAvailable=false;}
     if(blockRight&&msg==WM_RBUTTONUP){blockRight=false;return 1;}
     if(active&&msg==WM_RBUTTONDOWN){blockRight=true;cancel();return 1;}
     if(active&&msg==WM_MOUSEMOVE&&GetTickCount64()-lastMove>=16){lastMove=GetTickCount64();emit("MOVE");}
@@ -87,7 +128,7 @@ static LRESULT CALLBACK mouse(int code,WPARAM msg,LPARAM data){
   return CallNextHookEx(mouseHook,code,msg,data);
 }
 int wmain(int argc,wchar_t** argv){
-  if(argc!=5)return 2;wchar_t* end=nullptr;
+  if(argc!=6)return 2;wchar_t* end=nullptr;
   // The only process we can authorize is our actual launching parent. Never
   // accept ASFW_ANY, a renderer-supplied PID or a window owned by another app.
   if(!argv[4][0])return 2;
@@ -95,6 +136,11 @@ int wmain(int argc,wchar_t** argv){
   const unsigned long long parent=_wcstoui64(argv[4],&end,10);
   if(!end||*end||parent==0||parent>=MAXDWORD||!ownsParent(static_cast<DWORD>(parent)))return 2;
   parentProcess=static_cast<DWORD>(parent);
+  if(!argv[5][0])return 2;
+  for(const wchar_t* digit=argv[5];*digit;++digit)if(*digit<L'0'||*digit>L'9')return 2;
+  const unsigned long long windowValue=_wcstoui64(argv[5],&end,10);
+  if(!end||*end||windowValue==0||windowValue>UINTPTR_MAX)return 2;
+  mainWindow=reinterpret_cast<HWND>(static_cast<UINT_PTR>(windowValue));if(!ownsMainWindow())return 2;
   trigger=static_cast<UINT>(wcstoul(argv[1],&end,10));if(!end||*end||!(trigger==0||trigger==VK_SPACE||(trigger>='A'&&trigger<='Z')||(trigger>='0'&&trigger<='9')||(trigger>=VK_F1&&trigger<=VK_F12)))return 2;
   modifiers=static_cast<UINT>(wcstoul(argv[2],&end,10));if(!end||*end||(modifiers!=(MOD_CONTROL|MOD_ALT)&&modifiers!=(MOD_CONTROL|MOD_ALT|MOD_SHIFT)))return 2;
   if(wcscmp(argv[3],L"0")&&wcscmp(argv[3],L"1"))return 2;allowFullscreen=!wcscmp(argv[3],L"1");
@@ -106,7 +152,12 @@ int wmain(int argc,wchar_t** argv){
   keyboardHook=SetWindowsHookExW(WH_KEYBOARD_LL,keyboard,GetModuleHandleW(nullptr),0);mouseHook=SetWindowsHookExW(WH_MOUSE_LL,mouse,GetModuleHandleW(nullptr),0);
   if(!keyboardHook||!mouseHook){if(keyboardHook)UnhookWindowsHookEx(keyboardHook);if(mouseHook)UnhookWindowsHookEx(mouseHook);UnregisterHotKey(nullptr,1);return 4;}
   heartbeat=GetTickCount64();SetTimer(nullptr,1,100,nullptr);
-  std::thread([]{char c;while(std::fread(&c,1,1,stdin)==1){if(c=='H')heartbeat=GetTickCount64();else if(c=='D')PostThreadMessageW(ownerThread,probeMessage,0,0);}PostThreadMessageW(ownerThread,WM_QUIT,0,0);}).detach();
+  std::thread([]{char c;bool reading=false;unsigned long intent=0;unsigned digits=0;
+    while(std::fread(&c,1,1,stdin)==1){
+      if(reading){if(c>='0'&&c<='9'&&digits<9){intent=intent*10+static_cast<unsigned>(c-'0');++digits;continue;}if(c=='\n'&&digits&&intent)PostThreadMessageW(ownerThread,activateMessage,intent,1);reading=false;continue;}
+      if(c=='H')heartbeat=GetTickCount64();else if(c=='D')PostThreadMessageW(ownerThread,probeMessage,0,0);else if(c=='F'){reading=true;intent=0;digits=0;}
+    }PostThreadMessageW(ownerThread,WM_QUIT,0,0);
+  }).detach();
   std::puts("READY");std::fflush(stdout);
   while(GetMessageW(&msg,nullptr,0,0)>0){
     if(msg.message==finishMessage){
@@ -114,6 +165,7 @@ int wmain(int argc,wchar_t** argv){
         if(GetForegroundWindow()!=foreground||!permitted())cancel();
         else{
           pendingRelease=false;
+          activationAvailable=true;activationDeadline=GetTickCount64()+1500;
           // Windows enforces whether this gesture grants foreground rights.
           // Failure is not worked around with injected input or global policy.
           SetLastError(0);const BOOL granted=AllowSetForegroundWindow(parentProcess);
@@ -125,12 +177,16 @@ int wmain(int argc,wchar_t** argv){
       }
       continue;
     }
+    if(msg.message==activateMessage){if(msg.wParam==sequence&&activationAvailable){if(msg.lParam==1)focusPending=true;activateMain();}continue;}
     if(msg.message==probeMessage){
       const HWND window=GetForegroundWindow();DWORD owner=0;if(window)GetWindowThreadProcessId(window,&owner);
       const bool topmost=window&&(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_TOPMOST)!=0;
       std::printf("FOREGROUND %lu %d %d\n",sequence,owner==parentProcess?1:0,topmost?1:0);std::fflush(stdout);continue;
     }
-    if(msg.message==WM_TIMER){if(GetTickCount64()-heartbeat.load()>2500){cancel();held=false;}else if(!GetForegroundWindow()||GetForegroundWindow()!=foreground)cancel();}
+    if(msg.message==WM_TIMER){
+      if(pendingOutcome&&GetTickCount64()>=outcomeAt){pendingOutcome=false;const bool owned=ownsMainWindow()&&GetForegroundWindow()==mainWindow;std::printf("ACTIVATION %lu %d %lu\n",outcomeSequence,owned?1:0,owned?0:activationError);std::fflush(stdout);}
+      if(GetTickCount64()-heartbeat.load()>2500){cancel();held=false;}else if(focusPending)activateMain();else if(!GetForegroundWindow()||GetForegroundWindow()!=foreground)cancel();
+    }
     TranslateMessage(&msg);DispatchMessageW(&msg);
   }
   cancel();KillTimer(nullptr,1);UnhookWindowsHookEx(keyboardHook);UnhookWindowsHookEx(mouseHook);UnregisterHotKey(nullptr,1);return 0;

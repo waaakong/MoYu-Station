@@ -3,7 +3,7 @@ import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {join} from 'node:path';
 import type {DesktopWheelCommand,DesktopWheelSettings} from '@studyroom/contracts';
 import {metadataEnvironment} from '../../audio/library/metadataProcess';
-import {nativeArguments,parseWheelMessage,parseWheelFocusTrace,wheelSettingsSchema,wheelSlot} from './wheelProtocol';
+import {nativeArguments,nativeWindowArgument,parseWheelMessage,parseWheelFocusTrace,wheelSettingsSchema,wheelSlot} from './wheelProtocol';
 import type {WheelFocusTrace} from './wheelFocusDiagnostics';
 export class DesktopWheel {
   private helper?:ChildProcessWithoutNullStreams;private window?:BrowserWindow;private heartbeat?:NodeJS.Timeout;
@@ -12,15 +12,16 @@ export class DesktopWheel {
   private recordingUntil=0;
   setRecording(active:boolean){this.cancel();this.recordingUntil=active?Date.now()+30000:0;}
   private displayChanged=()=>this.cancel();
-  constructor(private execute:(command:DesktopWheelCommand)=>void,private report:(message:string)=>void,private trace?:WheelFocusTrace){screen.on('display-removed',this.displayChanged);screen.on('display-metrics-changed',this.displayChanged);}
+  constructor(private execute:(command:DesktopWheelCommand)=>void,private report:(message:string)=>void,private trace:WheelFocusTrace|undefined,private mainWindowHandle:()=>Buffer,private activated?:(success:boolean)=>void){screen.on('display-removed',this.displayChanged);screen.on('display-metrics-changed',this.displayChanged);}
   probeForeground(){if(this.trace&&this.helper&&!this.helper.killed)this.helper.stdin.write('D');}
+  requestMainActivation(){if(this.helper&&!this.helper.killed&&this.lastSequence>0)this.helper.stdin.write(`F${this.lastSequence}\n`);}
   async configure(input:DesktopWheelSettings){
     if(this.disposed)throw new Error('轮盘服务已关闭。');
     const settings=wheelSettingsSchema.parse(input);
     if(process.platform!=='win32'||!settings.enabled){this.stop();this.settings=settings;return;}
     if(this.helper&&this.settings?.accelerator===settings.accelerator&&this.settings.allowFullscreen===settings.allowFullscreen){this.cancel();await this.ensureWindow();this.settings=settings;return;}
     const helperPath=app.isPackaged?join(process.resourcesPath,'app.asar.unpacked/dist/native/moyu-input.exe'):join(app.getAppPath(),'dist/native/moyu-input.exe');
-    const candidate=spawn(helperPath,[...nativeArguments(settings.accelerator,settings.allowFullscreen),String(process.pid)],{windowsHide:true,env:metadataEnvironment()});
+    const candidate=spawn(helperPath,[...nativeArguments(settings.accelerator,settings.allowFullscreen),String(process.pid),nativeWindowArgument(this.mainWindowHandle())],{windowsHide:true,env:metadataEnvironment()});
     this.pending.add(candidate);
     candidate.stdin.on('error',()=>{});candidate.stderr.resume();
     let buffer='',started=false;
@@ -53,6 +54,7 @@ export class DesktopWheel {
   private handle(line:string){
     const diagnostic=parseWheelFocusTrace(line);
     if(diagnostic){
+      if(diagnostic.kind==='ACTIVATION'&&diagnostic.sequence===this.lastSequence){this.trace?.('activation',{sequence:diagnostic.sequence,owned:diagnostic.flag,error:diagnostic.detail});this.activated?.(diagnostic.flag);return;}
       if(this.trace&&diagnostic.sequence===this.lastSequence){
         if(diagnostic.kind==='TRANSFER')this.trace('transfer',{sequence:diagnostic.sequence,granted:diagnostic.flag,error:diagnostic.detail});
         else if(diagnostic.kind==='GESTURE')this.trace('gesture',{sequence:diagnostic.sequence,controlHeld:diagnostic.flag,altHeld:diagnostic.detail===1});
