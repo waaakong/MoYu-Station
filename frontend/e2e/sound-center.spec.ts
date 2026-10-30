@@ -50,6 +50,21 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test('stage client settings use the profile page and return to the stage without a nested dialog',async({page})=>{
+  await page.goto('/#/sound');
+  await page.evaluate(()=>{
+    const settings={shortcutsEnabled:false,shortcuts:{'play-pause':'MediaPlayPause',next:'MediaNextTrack',previous:'MediaPreviousTrack'},lyricsVisible:false,lyricsLocked:false};
+    window.studyRoomDesktop!.getDesktopMusic=async()=>({settings});
+  });
+  await page.getByRole('button',{name:'听歌舞台',exact:true}).click();await page.getByRole('button',{name:'我的',exact:true}).click();
+  await page.getByRole('button',{name:'客户端设置',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'桌面歌词',exact:true})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'客户端设置',exact:true})).toHaveCount(0);
+  await expect(page.locator('.client-settings .settings-nav strong')).toHaveCount(0);
+  await page.getByRole('button',{name:'返回听歌舞台',exact:true}).click();
+  await expect(page.getByRole('region',{name:'完整音乐视觉模式',exact:true})).toBeVisible();
+});
+
 test('provider playlists page, queue the selected collection, and clear after logout', async ({page}) => {
   await page.route('**/api/auth/me', route => route.fulfill({ json: { success: true, data: { id: '2', username: 'fixture-member', userType: 'NORMAL' } } }));
   await page.routeWebSocket('**/ws/chat', socket => { socket.onMessage(() => {}); });

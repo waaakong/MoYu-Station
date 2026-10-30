@@ -2,7 +2,7 @@
   <div class="volume-control">
     <label>
       <span>{{ label }}</span>
-      <input type="range" min="0" max="1" step="0.01" :value="value" :aria-label="`${label}音量`"
+      <input type="range" min="0" max="1" step="0.01" :value="muted ? 0 : value" :aria-label="`${label}音量`"
         :aria-valuetext="hint" :title="hint" @input="emit('change', Number(($event.target as HTMLInputElement).value))" />
       <output :title="hint">{{ percent }}%<small v-if="muted"> · 静音</small></output>
     </label>
@@ -16,7 +16,7 @@
 import { computed } from 'vue';
 const props = withDefaults(defineProps<{ label: string; value: number; muted?: boolean; muteControl?: boolean }>(), { muted: false, muteControl: true });
 const emit = defineEmits<{ change: [value: number]; mute: [] }>();
-const percent = computed(() => Math.round(props.value * 100));
+const percent = computed(() => props.muted ? 0 : Math.round(props.value * 100));
 const hint = computed(() => `${percent.value}%${props.muted ? '，已静音' : ''}`);
 </script>
 

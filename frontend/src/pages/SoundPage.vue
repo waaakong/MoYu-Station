@@ -11,7 +11,7 @@
       </div>
     </header>
 
-    <ListeningStage v-if="stageOpen" :favorite-track-ids="favoriteTrackIds" @toggle-favorite="toggleFavorite" @close="closeStage" />
+    <ListeningStage v-if="stageOpen" :favorite-track-ids="favoriteTrackIds" @toggle-favorite="toggleFavorite" @close="closeStage" @client-settings="router.push({name:'profile',query:{module:'client-settings',returnStage:'1'}})" />
     <div v-else class="sound-page__workspace" data-motion-group>
       <SoundSourceRail :active-source="activeSource" :track-count="visibleTrackCount" :favorite-count="favoriteTracks.length" :recent-count="recentTracks.length" :playlists="playlists" :roots="roots" :scanning="scanning" :show-local-library="canImport" :show-radio="showRadio" :show-providers="showProviders" :provider-statuses="providers.statuses" @select="selectSource" @create-playlist="createPlaylist" @rescan="rescanRoot" />
       <main v-motion-content="activeSource" class="sound-page__main sr-glass sr-glass--reading">
@@ -70,7 +70,7 @@ import { useQueueStore } from "../stores/queue";
 import { useShellStore } from "../stores/shell";
 import { useSoundStore } from "../stores/sound";
 import { useAuthStore } from "../stores/auth";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useProvidersStore } from "../stores/providers";
 import { useRadioStore } from "../stores/radio";
 import AmbientLibrary from "./sound/AmbientLibrary.vue";
@@ -108,7 +108,7 @@ const relocatingId = ref("");
 const error = ref("");
 const activeSource = ref(window.studyRoomDesktop ? "library" : "web-file");
 const contextOpen = ref(false);
-const stageOpen = ref(false);
+const stageOpen = ref(useRoute().query.stage==='1');
 const stageButton = ref<HTMLButtonElement>();
 const consoleButton = ref<HTMLButtonElement>();
 const webFileInput = ref<HTMLInputElement>();

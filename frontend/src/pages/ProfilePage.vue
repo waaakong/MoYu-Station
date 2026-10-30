@@ -13,7 +13,7 @@
         <ProfileFeedbackPanel v-else-if="activeModule === 'feedback'" @submit="sendFeedback" />
         <ProfileSecurityPanel v-else-if="activeModule === 'security'" :required="auth.passwordChangeRequired" @change="changePassword" />
         <ProfileUpdatesPanel v-else-if="activeModule === 'client'" />
-        <ProfileClientSettingsPanel v-else-if="activeModule === 'client-settings' && desktop" />
+        <template v-else-if="activeModule === 'client-settings' && desktop"><button v-if="route.query.returnStage==='1'" class="return-stage" type="button" @click="router.push({name:'sound',query:{stage:'1'}})">返回听歌舞台</button><ProfileClientSettingsPanel /></template>
       </section>
     </section>
   </main>

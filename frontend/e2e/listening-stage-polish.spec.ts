@@ -63,6 +63,30 @@ test('real mixed audio drives canvas; off and reduced motion clear it without st
   await page.getByRole('button', { name: '停止 棕噪音', exact: true }).click();
 });
 
+test('flow ambience advances without audio and freezes when reduced motion is enabled',async({page})=>{
+  await page.goto('/e2e/fixtures/listening-stage.html');
+  const clock=()=>page.locator('.flow-background').evaluate((element:HTMLCanvasElement)=>{
+    const gl=element.getContext('webgl')!;const program=gl.getParameter(gl.CURRENT_PROGRAM);
+    if(!program)throw new Error('Flow shader did not initialize');
+    return gl.getUniform(program,gl.getUniformLocation(program,'uTime')) as number;
+  });
+  const first=await clock();await expect.poll(clock).toBeGreaterThan(first+.05);
+  await page.getByRole('button',{name:'减少动态',exact:true}).click();
+  const frozen=await clock();await page.getByRole('button',{name:'下一句',exact:true}).click();
+  await expect.poll(clock).toBe(frozen);
+  await expect(page.getByText('已减少动态，保留静态舞台',{exact:true})).toBeVisible();
+});
+
+test('music mute displays zero and restores its previous level without muting ambient audio',async({page})=>{
+  await page.goto('/e2e/fixtures/listening-stage.html');
+  const slider=page.getByRole('slider',{name:'音乐音量',exact:true});
+  const level=await slider.inputValue();expect(Number(level)).toBeGreaterThan(0);
+  await page.getByRole('button',{name:'音乐静音',exact:true}).click();await expect(slider).toHaveValue('0');
+  await page.getByRole('button',{name:'取消音乐静音',exact:true}).click();await expect(slider).toHaveValue(level);
+  await page.getByRole('button',{name:'音乐静音',exact:true}).click();await slider.focus();await slider.press('ArrowRight');
+  await expect(slider).toHaveValue('1');await expect(page.getByRole('button',{name:'音乐静音',exact:true})).toBeVisible();
+});
+
 test('space settings and detailed focus actions remain reachable above the player at four sizes', async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1080, height: 640 }, { width: 390, height: 844 }]) {

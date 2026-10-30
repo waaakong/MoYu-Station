@@ -4,8 +4,9 @@ import {useFocusStore} from '../stores/focus';
 import {useSceneStore} from '../stores/scene';
 import {useAuthStore} from '../stores/auth';
 import {useShellStore} from '../stores/shell';
+import {useSoundStore} from '../stores/sound';
 export function startDesktopWheel(router:Router){
-  const player=usePlayerStore(),focus=useFocusStore(),scene=useSceneStore(),auth=useAuthStore(),shell=useShellStore();let pending=false,disposed=false;
+  const player=usePlayerStore(),sound=useSoundStore(),focus=useFocusStore(),scene=useSceneStore(),auth=useAuthStore(),shell=useShellStore();let pending=false,disposed=false;
   const stop=window.studyRoomDesktop?.onWheelCommand?.(command=>{
     if(disposed||pending||window.moyuStartupOverlay?.active)return;
     pending=true;const generation=auth.sessionGeneration;
@@ -13,7 +14,7 @@ export function startDesktopWheel(router:Router){
       if(command==='play-pause')await player.toggle();
       if(command==='next')await player.next();
       if(command==='previous')await player.previous();
-      if(command==='mute')player.toggleMute();
+      if(command==='mute')sound.setMusicBus(sound.settings.musicBus.volume,!sound.settings.musicBus.muted);
       if(command==='sound')await router.push({name:'sound'});
       if(command==='space')await router.push({name:'scene'});
       if(command==='focus'){

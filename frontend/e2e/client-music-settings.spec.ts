@@ -12,19 +12,19 @@ test('independent palettes preserve edits, reject invalid drafts and save valid 
   await page.getByRole('button',{name:'歌词高亮：暖杏',exact:true}).click();
   await page.locator('#fixture-echo').click();
   await page.getByRole('button',{name:'歌词原色：银灰',exact:true}).click();
-  await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await expect(page.getByRole('button',{name:'保存设置',exact:true})).toHaveCount(0);
   await expect(page.locator('#fixture-result')).toContainText('#edc7a5 / #aab7a3');
   await expect(page.getByRole('switch',{name:'锁定浮窗',exact:true})).toBeChecked();
-  await page.getByRole('button',{name:'歌词高亮：雾蓝',exact:true}).click();
-  await page.locator('#fixture-fail').click();await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await page.locator('#fixture-fail').click();await page.getByRole('button',{name:'歌词高亮：雾蓝',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('保存失败');
   await expect(page.getByRole('button',{name:'歌词高亮：雾蓝',exact:true})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'重试保存',exact:true}).click();await expect(page.locator('#fixture-result')).toContainText('#accfe3');
 });
 test('wheel recorder cancels and saves a changed chord without media key controls',async({page})=>{
   await page.goto('/e2e/fixtures/client-settings.html');
   await page.getByRole('tab',{name:'快捷轮盘',exact:true}).click();
   const recorder=page.getByRole('button',{name:'录制轮盘快捷键',exact:true});await recorder.click();await recorder.press('Escape');
   await expect(recorder).toContainText('Ctrl');await recorder.click();await recorder.press('Control+Alt+k');
-  await page.getByRole('button',{name:'保存设置',exact:true}).click();await expect(page.locator('#fixture-result')).toContainText('Control+Alt+K');
+  await expect(page.locator('#fixture-result')).toContainText('Control+Alt+K');
   await expect(page.getByRole('checkbox',{name:'启用全局媒体快捷键',exact:true})).toHaveCount(0);
 });

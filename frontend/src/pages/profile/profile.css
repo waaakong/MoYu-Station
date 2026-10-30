@@ -56,3 +56,5 @@
 }
 @media(prefers-reduced-transparency:reduce) { .profile-page .glass { background:var(--sr-color-surface-solid); backdrop-filter:none; } }
 .sr-reduced-transparency .profile-page .glass { background:var(--sr-color-surface-solid); backdrop-filter:none; }
+
+.return-stage{min-height:40px;margin-bottom:18px;padding:8px 14px;border:1px solid var(--sr-color-line);border-radius:12px;background:transparent;color:var(--sr-color-text);cursor:pointer}
