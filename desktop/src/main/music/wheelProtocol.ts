@@ -12,4 +12,10 @@ export function parseWheelMessage(line:string){
   const match=/^(OPEN|MOVE|RELEASE|CANCEL) ([1-9]\d{0,8}) (-?\d{1,7}) (-?\d{1,7})$/.exec(line);
   return match?{type:match[1]!,sequence:Number(match[2]),x:Number(match[3]),y:Number(match[4])}:undefined;
 }
+export function parseWheelFocusTrace(line:string){
+  const match=/^(TRANSFER|FOREGROUND|GESTURE) ([1-9]\d{0,8}) ([01]) (\d{1,10})$/.exec(line);
+  if(!match)return;
+  const detail=Number(match[4]);if(detail>0xffffffff||match[1]!=='TRANSFER'&&detail>1)return;
+  return {kind:match[1]!,sequence:Number(match[2]),flag:match[3]==='1',detail};
+}
 export function wheelSlot(dx:number,dy:number){if(Math.hypot(dx,dy)<66)return -1;return Math.round((Math.atan2(dy,dx)*180/Math.PI+90+360)%360/45)%8;}

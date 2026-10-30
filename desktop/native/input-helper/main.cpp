@@ -13,6 +13,7 @@ static bool active=false,held=false,blockRight=false,blockEscape=false,allowFull
 static unsigned long sequence=0;static HWND foreground=nullptr;
 static DWORD parentProcess=0;static bool pendingRelease=false;static POINT releasePoint{};
 static constexpr UINT finishMessage=WM_APP+1;
+static constexpr UINT probeMessage=WM_APP+2;
 static std::atomic<ULONGLONG> heartbeat{0};static ULONGLONG lastMove=0;
 static void emit(const char* type){POINT p{};GetCursorPos(&p);std::printf("%s %lu %ld %ld\n",type,sequence,p.x,p.y);std::fflush(stdout);}
 static void cancel(){if(active||pendingRelease){active=false;pendingRelease=false;emit("CANCEL");}}
@@ -105,7 +106,7 @@ int wmain(int argc,wchar_t** argv){
   keyboardHook=SetWindowsHookExW(WH_KEYBOARD_LL,keyboard,GetModuleHandleW(nullptr),0);mouseHook=SetWindowsHookExW(WH_MOUSE_LL,mouse,GetModuleHandleW(nullptr),0);
   if(!keyboardHook||!mouseHook){if(keyboardHook)UnhookWindowsHookEx(keyboardHook);if(mouseHook)UnhookWindowsHookEx(mouseHook);UnregisterHotKey(nullptr,1);return 4;}
   heartbeat=GetTickCount64();SetTimer(nullptr,1,100,nullptr);
-  std::thread([]{char c;while(std::fread(&c,1,1,stdin)==1){if(c=='H')heartbeat=GetTickCount64();}PostThreadMessageW(ownerThread,WM_QUIT,0,0);}).detach();
+  std::thread([]{char c;while(std::fread(&c,1,1,stdin)==1){if(c=='H')heartbeat=GetTickCount64();else if(c=='D')PostThreadMessageW(ownerThread,probeMessage,0,0);}PostThreadMessageW(ownerThread,WM_QUIT,0,0);}).detach();
   std::puts("READY");std::fflush(stdout);
   while(GetMessageW(&msg,nullptr,0,0)>0){
     if(msg.message==finishMessage){
@@ -115,11 +116,19 @@ int wmain(int argc,wchar_t** argv){
           pendingRelease=false;
           // Windows enforces whether this gesture grants foreground rights.
           // Failure is not worked around with injected input or global policy.
-          AllowSetForegroundWindow(parentProcess);
+          SetLastError(0);const BOOL granted=AllowSetForegroundWindow(parentProcess);
+          const DWORD error=granted?0:GetLastError();
+          std::printf("TRANSFER %lu %d %lu\n",sequence,granted?1:0,error);
+          std::printf("GESTURE %lu %d %d\n",sequence,down(VK_CONTROL)?1:0,down(VK_MENU)?1:0);
           std::printf("RELEASE %lu %ld %ld\n",sequence,releasePoint.x,releasePoint.y);std::fflush(stdout);
         }
       }
       continue;
+    }
+    if(msg.message==probeMessage){
+      const HWND window=GetForegroundWindow();DWORD owner=0;if(window)GetWindowThreadProcessId(window,&owner);
+      const bool topmost=window&&(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_TOPMOST)!=0;
+      std::printf("FOREGROUND %lu %d %d\n",sequence,owner==parentProcess?1:0,topmost?1:0);std::fflush(stdout);continue;
     }
     if(msg.message==WM_TIMER){if(GetTickCount64()-heartbeat.load()>2500){cancel();held=false;}else if(!GetForegroundWindow()||GetForegroundWindow()!=foreground)cancel();}
     TranslateMessage(&msg);DispatchMessageW(&msg);

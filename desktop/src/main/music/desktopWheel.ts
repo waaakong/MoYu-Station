@@ -3,7 +3,8 @@ import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {join} from 'node:path';
 import type {DesktopWheelCommand,DesktopWheelSettings} from '@studyroom/contracts';
 import {metadataEnvironment} from '../../audio/library/metadataProcess';
-import {nativeArguments,parseWheelMessage,wheelSettingsSchema,wheelSlot} from './wheelProtocol';
+import {nativeArguments,parseWheelMessage,parseWheelFocusTrace,wheelSettingsSchema,wheelSlot} from './wheelProtocol';
+import type {WheelFocusTrace} from './wheelFocusDiagnostics';
 export class DesktopWheel {
   private helper?:ChildProcessWithoutNullStreams;private window?:BrowserWindow;private heartbeat?:NodeJS.Timeout;
   private settings?:DesktopWheelSettings;private active=0;private lastSequence=0;private frameSequence=0;private center={x:0,y:0};private ready=false;
@@ -11,7 +12,8 @@ export class DesktopWheel {
   private recordingUntil=0;
   setRecording(active:boolean){this.cancel();this.recordingUntil=active?Date.now()+30000:0;}
   private displayChanged=()=>this.cancel();
-  constructor(private execute:(command:DesktopWheelCommand)=>void,private report:(message:string)=>void){screen.on('display-removed',this.displayChanged);screen.on('display-metrics-changed',this.displayChanged);}
+  constructor(private execute:(command:DesktopWheelCommand)=>void,private report:(message:string)=>void,private trace?:WheelFocusTrace){screen.on('display-removed',this.displayChanged);screen.on('display-metrics-changed',this.displayChanged);}
+  probeForeground(){if(this.trace&&this.helper&&!this.helper.killed)this.helper.stdin.write('D');}
   async configure(input:DesktopWheelSettings){
     if(this.disposed)throw new Error('轮盘服务已关闭。');
     const settings=wheelSettingsSchema.parse(input);
@@ -49,6 +51,15 @@ export class DesktopWheel {
     await window.loadFile(join(app.getAppPath(),'dist/renderer/wheel.html'));this.ready=true;
   }
   private handle(line:string){
+    const diagnostic=parseWheelFocusTrace(line);
+    if(diagnostic){
+      if(this.trace&&diagnostic.sequence===this.lastSequence){
+        if(diagnostic.kind==='TRANSFER')this.trace('transfer',{sequence:diagnostic.sequence,granted:diagnostic.flag,error:diagnostic.detail});
+        else if(diagnostic.kind==='GESTURE')this.trace('gesture',{sequence:diagnostic.sequence,controlHeld:diagnostic.flag,altHeld:diagnostic.detail===1});
+        else this.trace('foreground',{sequence:diagnostic.sequence,owned:diagnostic.flag,topmost:diagnostic.detail===1});
+      }
+      return;
+    }
     if(Date.now()<this.recordingUntil){this.cancel();return;}
     const event=parseWheelMessage(line);if(!event||!this.settings||!this.ready||!this.window||this.window.isDestroyed())return;
     if(event.type==='OPEN'){
