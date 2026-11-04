@@ -1,0 +1,13 @@
+<template><button ref="button" class="stage-action-button" type="button" :aria-label="label" :title="hint||label" :aria-pressed="pressed" :aria-busy="busy||undefined" :disabled="disabled" @mouseenter="tip=true" @mouseleave="tip=false" @focus="tip=true" @blur="tip=false" @keydown.esc="tip=false"><AppIcon :name="busy?'refresh':icon" :class="{'stage-action-spin':busy}"/><span class="stage-action-tip" :class="{'is-visible':tip,'is-below':below}" aria-hidden="true">{{hint||label}}</span></button></template>
+<script setup lang="ts">
+import {ref} from 'vue';
+import AppIcon from '../../../components/icons/AppIcon.vue';
+import type {IconName} from '../../../components/icons/paths';
+defineProps<{icon:IconName;label:string;hint?:string;pressed?:boolean;busy?:boolean;disabled?:boolean;below?:boolean}>();
+const button=ref<HTMLButtonElement>(),tip=ref(false);defineExpose({focus:()=>button.value?.focus()});
+</script>
+<style scoped>
+.stage-action-button{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;min-width:44px;flex-shrink:0;padding:0;border:1px solid #dbe9d62a;border-radius:50%;background:#e5efdb06;color:inherit;cursor:pointer;line-height:1;transition:background .14s,color .14s,border-color .14s;touch-action:manipulation}
+.stage-action-button:hover:not(:disabled){background:#e5efdb15;border-color:#e5efdb52}.stage-action-button:active:not(:disabled){transform:scale(.96)}.stage-action-button:focus-visible{outline:2px solid var(--accent,#d9e7af);outline-offset:3px}.stage-action-button[aria-pressed=true]{color:var(--accent,#d9e7af);background:#d9e7af14;border-color:#d9e7af60}.stage-action-button:disabled{opacity:.35;cursor:not-allowed}.stage-action-button :deep(svg){display:block;width:19px;height:19px;margin:0;pointer-events:none}
+.stage-action-tip{position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) translateY(3px);white-space:nowrap;border:1px solid #deead22e;border-radius:9px;padding:8px 11px;font:400 11px/1.5 var(--sr-font-sans);color:#e4eddf;background:#14241ff5;box-shadow:0 6px 24px #0003;opacity:0;visibility:hidden;pointer-events:none;z-index:60;transition:opacity .12s,transform .12s}.stage-action-tip.is-below{bottom:auto;top:calc(100% + 9px)}.stage-action-tip.is-visible{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}.stage-action-spin{animation:stage-action-spin 1s linear infinite}@keyframes stage-action-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.stage-action-button:active{transform:none}}
+</style>

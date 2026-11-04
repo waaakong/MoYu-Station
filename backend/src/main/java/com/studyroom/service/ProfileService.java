@@ -266,6 +266,9 @@ public class ProfileService {
     response.setTimeZone(STAT_ZONE.getId());
     response.setFocusMinutes(stats.getTodayFocusMinutes());
     response.setFishMinutes(stats.getFishMinutes());
+    response.setOnlineMinutes(stats.getOnlineMinutes());
+    response.setStreakDays(stats.getStreakDays());
+    response.setTotalFocusHours(stats.getTotalFocusHours());
     response.setFakeEffortIndex(stats.getFakeEffortIndex());
     response.setFishTimingBasis(stats.getFishTimingBasis());
     response.setFavoriteScene(stats.getFavoriteScene());

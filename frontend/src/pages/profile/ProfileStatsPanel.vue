@@ -16,7 +16,7 @@
     <p aria-live="polite">{{ liveError || activityState.error || (live ? '实时预估包含本机待同步记录，按秒计算；云端确认后去重校准。旧记录缺少页面信息，不补算片刻放松时间。' : activityState.pending ? '本机有待同步活动记录，当前显示已确认的云端部分。' : stats?.coverage==='PARTIAL' ? '当天记录不完整，仅展示已确认时长，暂不计算指数。' : stats?.coverage==='UNAVAILABLE' ? '历史在线与摸鱼数据未采集，无法补算。' : '多端同时在线按时间并集统计，日期采用北京时间。') }}</p>
     <article v-if="report" class="profile-report"><p>DAILY REPORT</p><h2>{{ report.title || "今日学习报告" }}</h2><strong>{{ report.focusMinutes ?? "暂无" }} 分钟专注</strong><span>{{ report.quote || "把时间调成适合自己的样子。" }}</span></article>
     <div v-if="report" class="profile-actions"><button type="button" @click="editor?.open()">预览学习卡片</button></div>
-    <StudyCardEditor v-if="report" ref="editor" :report="report" />
+    <StudyCardEditor v-if="report" ref="editor" :report="report" :today-snapshot="todaySnapshot" />
   </section>
 </template>
 
@@ -29,8 +29,19 @@ const effort=computed(()=>live.value?live.value.index:props.stats?.fakeEffortInd
 function duration(ms:number){const seconds=Math.floor(ms/1000);return `${Math.floor(seconds/60)} 分 ${seconds%60} 秒`;}
 import StudyCardEditor from './StudyCardEditor.vue';
 import {activityState} from '../../activity/state';
+import {shanghaiDate} from '../../activity/projection';
 const editor=ref<InstanceType<typeof StudyCardEditor>>();
 const props=defineProps<{ stats: ProfileStats | null; report: ShareCard | null; loading: boolean; error?: string }>();
+function todaySnapshot():ShareCard|null {
+  if(!props.report||props.report.statDate!==shanghaiDate()||!props.stats)return null;
+  const current=live.value,stats=props.stats;
+  return {...props.report,streakDays:stats.streakDays,totalFocusHours:stats.totalFocusHours,favoriteScene:stats.favoriteScene||undefined,
+    onlineMinutes:current?Math.floor(current.onlineMs/60000):stats.onlineMinutes,
+    focusMinutes:current?Math.floor(current.focusMs/60000):stats.todayFocusMinutes,
+    fishMinutes:current?Math.floor(current.fishMs/60000):stats.fishMinutes,
+    fakeEffortIndex:current?current.index:stats.fakeEffortIndex,
+    fishTimingBasis:current?'RELAX_PAGE':stats.fishTimingBasis,estimated:!!current};
+}
 defineEmits<{ retry: [] }>();
 function value(input: number | null | undefined, suffix: string) { return input === undefined || input === null ? "暂无" : `${input} ${suffix}`; }
 </script>

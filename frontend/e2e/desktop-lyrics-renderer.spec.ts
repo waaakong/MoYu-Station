@@ -16,6 +16,13 @@ test('real lyric renderer slides adjacent rows, cancels seeks and uses only supp
   const afterSeek=await page.evaluate(frame=>{(window as any).acceptLyricFrame({...frame,jump:true});return document.getAnimations().filter(a=>a.playState==='running').length;},base);expect(afterSeek).toBe(0);
   await page.evaluate(frame=>(window as any).acceptLyricFrame({...frame,line:'你好',words:[{text:'你',timeMs:1000,endMs:2000},{text:'好',timeMs:2000}]}),base);
   expect(await page.locator('.ink').first().getAttribute('style')).toContain('50%');
+  // Same lyric key can acquire normalized timing without a new row or a slide.
+  await page.evaluate(frame=>(window as any).acceptLyricFrame({...frame,line:'你好',timingMode:'estimated',words:[{text:'你',timeMs:1000,endMs:3000},{text:'好',timeMs:3000,endMs:4000}]}),base);
+  expect(await page.locator('.ink').first().getAttribute('style')).toContain('75%');
+  await expect(page.locator('#surface')).toHaveAttribute('title',/估算/);
+  const frozen=await page.locator('.ink').first().getAttribute('style');await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));expect(await page.locator('.ink').first().getAttribute('style')).toBe(frozen);
+  await page.evaluate(frame=>(window as any).acceptLyricFrame({...frame,line:'你好',positionMs:3500,jump:true,timingMode:'estimated',words:[{text:'你',timeMs:1000,endMs:3000},{text:'好',timeMs:3000,endMs:4000}]}),base);
+  expect(await page.locator('.ink').last().getAttribute('style')).toContain('50%');
   await page.locator('#surface').hover();
   await page.getByRole('button',{name:'播放',exact:true}).click();expect(await page.evaluate(()=>(window as any).lyricActions)).toEqual(['play-pause']);
   await page.emulateMedia({reducedMotion:'reduce'});expect(await page.evaluate(frame=>{(window as any).acceptLyricFrame({...frame,lineKey:'synthetic:1:2',line:'第三句'});return document.getAnimations().filter(a=>a.playState==='running').length;},base)).toBe(0);

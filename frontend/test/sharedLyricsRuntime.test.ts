@@ -25,6 +25,7 @@ describe('application-owned shared lyrics wiring',()=>{
     stopDesktop=startDesktopLyrics();await settle();
     expect(bridge.getTrackLyrics).toHaveBeenCalledTimes(1);expect(sharedLyricsState.currentIndex).toBe(0);
     expect(bridge.publishDesktopLyrics).toHaveBeenLastCalledWith(expect.objectContaining({line:'One',positionMs:1000}));
+    expect(bridge.publishDesktopLyrics.mock.calls.at(-1)?.[0]).toMatchObject({timingMode:'estimated',words:[{text:'O',timeMs:1000,endMs:1000+2000/3},{text:'n',timeMs:1000+2000/3,endMs:1000+4000/3},{text:'e',timeMs:1000+4000/3,endMs:3000}]});
     expect(bridge.publishDesktopLyrics.mock.calls.at(-1)?.[0]?.trackKey).not.toContain('synthetic-token');
     await saveSharedLyricsOffset(500);await settle();
     expect(sharedLyricsState.offsetMs).toBe(1000);expect(sharedLyricsState.currentIndex).toBe(-1);

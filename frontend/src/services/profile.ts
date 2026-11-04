@@ -52,6 +52,10 @@ export interface ProfilePost {
 }
 
 export interface ShareCard {
+  onlineMinutes?:number|null;
+  streakDays?:number|null;
+  totalFocusHours?:number|null;
+  estimated?:boolean;
   fishTimingBasis?:'LEGACY_IDLE'|'RELAX_PAGE';
   coverage?:string;
   statDate?: string;

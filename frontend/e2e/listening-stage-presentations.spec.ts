@@ -13,8 +13,10 @@ test('six lyric styles persist independently of three stage layouts',async({page
   await page.getByRole('button',{name:'关闭视觉设置',exact:true}).click();await page.getByRole('tab', { name: '沉浸歌词',exact:true}).click();
   await expect(page.locator('.stage-lyrics')).toHaveClass(/stage-lyrics--story/);
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('moyu-stage-fixture-v2')||'{}').visualizer?.stage?.preferences?.lyricStyle)).toBe('story');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('moyu-stage-fixture-v2')||'{}').visualizer?.stage?.preferences?.layout)).toBe('lyrics');
   await page.reload();await expect(page.locator('.stage-lyrics')).toHaveClass(/stage-lyrics--story/);
-  await expect(page.locator('[data-word]')).toHaveCount(0);
+  await expect(page.locator('[data-word]')).toHaveCount(Array.from('把时间留给山海').length);
+  await expect(page.getByText('按句内进度估算',{exact:true})).toBeVisible();
 });
 test('empty and failed lyrics recover, unsaved preference can retry',async({page})=>{
   await page.goto('/e2e/fixtures/listening-stage.html');

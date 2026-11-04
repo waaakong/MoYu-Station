@@ -7,20 +7,20 @@ export const studyQuotes = [
   '给世界按下暂停，给自己一段时间。','一页书，一段光，一个专注的你。',
   '不必每刻发光，稳稳向前就好。','今天走过的每一步，都算数。'
 ] as const;
-export type CardOptions = { focus: boolean; fish: boolean; effort: boolean };
-export type StudyCard = { nickname: string; date: string; scene: string; quote: string; options: CardOptions; focus: number|null; fish: number|null; effort: number|null; fishTimingBasis?:ShareCard['fishTimingBasis'] };
+export type CardOptions = { focus: boolean; fish: boolean; effort: boolean; online?:boolean;streak?:boolean;total?:boolean };
+export type StudyCard = { nickname: string; date: string; scene: string; quote: string; options: CardOptions; focus: number|null; fish: number|null; effort: number|null; online:number|null;streak:number|null;total:number|null;estimated:boolean;fishTimingBasis?:ShareCard['fishTimingBasis'] };
 export function nextQuote(previous: number, random=Math.random()) { return (previous+1+Math.min(studyQuotes.length-2,Math.max(0,Math.floor(random*(studyQuotes.length-1)))))%studyQuotes.length; }
 const metric = (value: unknown) => typeof value==='number' && Number.isFinite(value) && value>=0 ? value : null;
 export function studyCardSnapshot(report:ShareCard,nickname:string,options:CardOptions,quote:number):StudyCard {
   return { nickname:nickname.slice(0,40)||'我',date:report.timeZone==='Asia/Shanghai' && /^\d{4}-\d{2}-\d{2}$/.test(report.statDate||'')?report.statDate!:'日期不可用',
-    scene:report.favoriteScene||'暂无',quote:studyQuotes[quote]||studyQuotes[0],options:{...options},focus:metric(report.focusMinutes),fish:metric(report.fishMinutes),effort:metric(report.fakeEffortIndex),fishTimingBasis:report.fishTimingBasis };
+    scene:report.favoriteScene||'暂无',quote:studyQuotes[quote]||studyQuotes[0],options:{...options},focus:metric(report.focusMinutes),fish:metric(report.fishMinutes),effort:metric(report.fakeEffortIndex),online:metric(report.onlineMinutes),streak:metric(report.streakDays),total:metric(report.totalFocusHours),estimated:report.estimated===true,fishTimingBasis:report.fishTimingBasis };
 }
 export function cardMetrics(card:StudyCard) {
-  return ([['focus','专注分钟',card.focus,'分钟'],['fish','摸鱼分钟',card.fish,'分钟'],['effort','假努力指数',card.effort,'']] as const)
+  return ([['focus','专注分钟',card.focus,'分钟'],['streak','连续专注',card.streak,'天'],['total','累计专注',card.total,'小时'],['online','今日在线',card.online,'分钟'],['fish','摸鱼分钟',card.fish,'分钟'],['effort','假努力指数',card.effort,'']] as const)
     .filter(([key])=>card.options[key]).map(([key,label,value,unit])=>({label,text:value===null?'暂无':`${key==='effort'?value.toFixed(2):value}${unit?' '+unit:''}`}));
 }
 const timingLabel=(card:StudyCard)=>card.fishTimingBasis==='RELAX_PAGE'?'摸鱼为片刻放松页面累计，仅含新口径采集后记录。':'摸鱼为历史旧口径：在线但未专注。';
-export function cardTranscript(card:StudyCard) { return [card.nickname,card.date,card.quote,...cardMetrics(card).map(item=>`${item.label}：${item.text}`),...(card.options.fish?[timingLabel(card)]:[]),`常用场景：${card.scene}`].join(' · '); }
+export function cardTranscript(card:StudyCard) { return [card.nickname,card.date,card.quote,...cardMetrics(card).map(item=>`${item.label}：${item.text}`),...(card.options.fish?[timingLabel(card)]:[]),`常用场景：${card.scene}`,card.estimated?'含本机实时预估；连续与累计专注为已确认记录':'所选日期已确认记录'].join(' · '); }
 export function paintStudyCard(canvas:HTMLCanvasElement,card:StudyCard,image:HTMLImageElement) {
   canvas.width=1200;canvas.height=675;
   const c=canvas.getContext('2d');if(!c || !image.naturalWidth || !image.naturalHeight)throw new Error('卡片画布或背景不可用');
@@ -30,12 +30,15 @@ export function paintStudyCard(canvas:HTMLCanvasElement,card:StudyCard,image:HTM
   c.fillStyle=shade;c.fillRect(0,0,1200,675);c.shadowColor='rgba(0,0,0,.72)';c.shadowBlur=5;c.shadowOffsetY=2;c.fillStyle='#f0f2f1';
   const text=(value:string,x:number,y:number,size:number,max=1028)=>{c.font=`${size}px "Microsoft YaHei", sans-serif`;while(c.measureText(value).width>max&&size>18)c.font=`${--size}px "Microsoft YaHei", sans-serif`;c.fillText(value,x,y,max);};
   text('MOYU / STUDY REPORT',86,95,18);c.textAlign='right';text(card.date,1114,95,18);c.textAlign='left';
-  text(card.nickname+'的学习片刻',86,170,44);text(card.quote,86,240,30);
-  const metrics=cardMetrics(card);const width=(1028-22*(metrics.length-1))/Math.max(1,metrics.length);
-  if(metrics.length)metrics.forEach((item,i)=>{text(item.label,86+i*(width+22),366,20,width-22);text(item.text,86+i*(width+22),424,37,width-22);});
+  text(card.nickname+'的学习片刻',86,157,38);text(card.quote,86,211,25);
+  const metrics=cardMetrics(card);const columns=Math.min(3,metrics.length),width=(1028-22*(columns-1))/Math.max(1,columns);
+  if(metrics.length)metrics.forEach((item,i)=>{const x=86+(i%columns)*(width+22),y=metrics.length>3?278+Math.floor(i/columns)*127:345;
+    if(typeof c.roundRect==='function'){c.save();c.shadowBlur=0;c.shadowOffsetY=0;c.fillStyle='rgba(229,239,218,.055)';c.strokeStyle='rgba(222,236,210,.14)';c.beginPath();c.roundRect(x-14,y-28,width,109,14);c.fill();c.stroke();c.restore();}
+    text(item.label,x,y,19,width-32);text(item.text,x,y+49,33,width-32);});
   else text('留一段安静的时间，给自己。',86,405,26);
-  text('常用场景 · '+card.scene,86,536,21);
-  if(card.options.effort)text('假努力指数为趣味指标，不作为能力评价。',86,580,17,660);
-  if(card.options.fish)text(timingLabel(card),86,610,17,750);
+  text('常用场景 · '+card.scene,86,525,20);
+  text(card.estimated?'含本机实时预估；连续与累计专注为云端已确认记录。':'所选日期已确认记录 · 北京时间',86,558,16,1028);
+  if(card.options.effort)text('假努力指数为趣味指标，不作为能力评价。',86,588,16,660);
+  if(card.options.fish)text(timingLabel(card),86,615,16,750);
   c.textAlign='right';text('墨屿 · 把时间留给自己',1114,620,18);c.textAlign='left';
 }

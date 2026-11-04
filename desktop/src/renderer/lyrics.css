@@ -5,3 +5,4 @@ header{height:36px;padding:3px 6px;align-items:center;gap:6px;-webkit-app-region
 nav{align-items:center;gap:3px;-webkit-app-region:no-drag}
 nav button{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;margin:0;padding:6px;line-height:1;vertical-align:middle;overflow:hidden;-webkit-app-region:no-drag}
 nav button svg{display:block;width:16px;height:16px;flex:none;pointer-events:none}
+.word{white-space:pre}

@@ -18,6 +18,15 @@ public class ShareCardResponse {
   private String title;
   private Integer focusMinutes;
   private Integer fishMinutes;
+  private Integer onlineMinutes;
+  private Integer streakDays;
+  private BigDecimal totalFocusHours;
+  public Integer getOnlineMinutes(){return onlineMinutes;}
+  public void setOnlineMinutes(Integer value){onlineMinutes=value;}
+  public Integer getStreakDays(){return streakDays;}
+  public void setStreakDays(Integer value){streakDays=value;}
+  public BigDecimal getTotalFocusHours(){return totalFocusHours;}
+  public void setTotalFocusHours(BigDecimal value){totalFocusHours=value;}
   private BigDecimal fakeEffortIndex;
   private String favoriteScene;
   private String quote;

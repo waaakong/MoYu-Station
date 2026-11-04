@@ -86,27 +86,31 @@
         </div>
       </section>
 
-      <button class="memo-tab" type="button" aria-label="打开备忘录" @click="memoOpen = true">‹</button>
+      <button ref="memoTrigger" class="memo-tab" type="button" aria-label="打开备忘录" :aria-expanded="memoOpen" @click="memoOpen = true">‹</button>
       <Transition v-bind="memoMotion">
-        <aside v-if="memoOpen" class="memo-panel" @click.stop>
+        <aside v-if="memoOpen" class="memo-panel sr-glass sr-glass--floating" aria-label="备忘录" @click.stop @keydown.esc.stop="closeMemo">
           <div class="memo-head">
             <div><small>QUICK NOTES</small><h2>备忘录</h2></div>
-            <button type="button" aria-label="关闭备忘录" @click="memoOpen = false"><AppIcon name="close" /></button>
+            <button type="button" aria-label="关闭备忘录" title="收起备忘录" @click="closeMemo"><AppIcon name="close" /></button>
           </div>
-          <h3>今日任务</h3>
+          <div class="memo-meta"><span>{{memoDate}}</span><span class="memo-save" :role="memoSaveStatus==='error'?'alert':'status'">{{memoSaveLabel}}<button v-if="memoSaveStatus==='error'" type="button" @click="saveMemo">重试</button></span></div>
+          <div class="memo-scroll">
+          <div class="memo-section-head"><h3>今日任务</h3><span>{{todos.filter(todo=>todo.done).length}} / {{todos.length}}</span></div>
           <form class="todo-form" @submit.prevent="addTodo">
             <input v-model.trim="newTodo" type="text" maxlength="80" placeholder="输入任务，按 Enter 添加" />
             <button type="submit" aria-label="添加任务"><AppIcon name="plus" /></button>
           </form>
           <ul class="todo-list">
             <li v-for="todo in todos" :key="todo.id" :class="{ done: todo.done }">
-              <button type="button" class="todo-check" @click="toggleTodo(todo)">✓</button>
+              <button type="button" class="todo-check" :aria-label="`${todo.done?'标为未完成':'完成任务'}：${todo.text}`" :aria-pressed="todo.done" @click="toggleTodo(todo)"><AppIcon name="check" /></button>
               <span>{{ todo.text }}</span>
               <button type="button" class="todo-delete" aria-label="删除任务" @click="deleteTodo(todo.id)"><AppIcon name="close" /></button>
             </li>
           </ul>
-          <h3>随手记</h3>
-          <textarea v-model="memoText" maxlength="1200" placeholder="把突然冒出来的想法先放在这里。" @input="saveMemo"></textarea>
+          <p v-if="!todos.length" class="memo-empty">暂时没有任务，给今天留一点余地。</p>
+          <div class="memo-section-head memo-note-head"><h3>随手记</h3><span>{{memoText.length}} / 1200</span></div>
+          <textarea v-model="memoText" aria-label="随手记" maxlength="1200" placeholder="把突然冒出来的想法先放在这里。" @input="saveMemo"></textarea>
+          <p class="memo-privacy">仅保存到本机，不会自动上传随手记。</p>
           <FocusHistoryImport
             v-if="authStore.isLoggedIn"
             :count="manualHistory.length"
@@ -114,6 +118,7 @@
             :pending="historyImportPending"
             @import="importManualHistory"
           />
+          </div><footer class="memo-footer"><span>{{todos.some(todo=>todo.done)?`已完成 ${todos.filter(todo=>todo.done).length} 件小事，保持自己的节奏。`:'慢慢来，一次只做一件事。'}}</span><span>Esc 收起</span></footer>
         </aside>
       </Transition>
 
@@ -151,7 +156,7 @@
 </template>
 
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useMotionTransition } from '../motion/transitions';
 const modeMotion = useMotionTransition('menu'), timeMotion = useMotionTransition('menu'), memoMotion = useMotionTransition('drawer');
 import { shellBackdropKey } from "../components/scenes/shellBackdrop";
@@ -233,6 +238,11 @@ const checkinPending = ref(false);
 const newTodo = ref("");
 const todos = ref([]);
 const memoText = ref("");
+const memoTrigger=ref(),memoSaveStatus=ref('idle');
+const memoSaveLabel=computed(()=>({idle:'本机自动保存',saving:'正在保存…',saved:'已保存到本机',error:'保存失败，内容仍保留'}[memoSaveStatus.value]));
+const memoDate=computed(()=>{memoOpen.value;return new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric'}).format(new Date());});
+let memoLoadTicket=0,memoSaveTicket=0,memoSaveQueue=Promise.resolve();
+async function closeMemo(){memoOpen.value=false;await nextTick();memoTrigger.value?.focus();}
 const manualHistory = ref([]);
 const historyImportPending = ref(false);
 const manualHistoryRange = computed(() => {
@@ -461,8 +471,10 @@ function workspaceScope() {
 }
 
 async function loadMemo() {
+  const ticket=++memoLoadTicket,scope=workspaceScope(),valid=()=>ticket===memoLoadTicket&&scope===workspaceScope();
+  ++memoSaveTicket;memoSaveStatus.value='idle';todos.value=[];memoText.value='';
   try {
-    let saved = await readFocusWorkspace(workspaceScope());
+    let saved = await readFocusWorkspace(scope);if(!valid())return;
     if (!saved) {
       const legacyKey = `studyroom-focus-memo-${authStore.user?.id || "guest"}`;
       const legacy = JSON.parse(localStorage.getItem(legacyKey) || "null");
@@ -477,25 +489,31 @@ async function loadMemo() {
           : [];
         memoText.value = String(legacy.memoText || "").slice(0, 20_000);
         await saveMemo();
-        saved = await readFocusWorkspace(workspaceScope());
+        saved = await readFocusWorkspace(scope);if(!valid())return;
       }
     }
     todos.value = Array.isArray(saved?.todos) ? saved.todos : [];
     memoText.value = saved?.memoText || "";
   } catch {
+    if(!valid())return;
+    memoSaveStatus.value='error';
     todos.value = [];
     memoText.value = "";
   }
 }
 
 async function saveMemo() {
-  await saveFocusWorkspace({
+  const ticket=++memoSaveTicket,scope=workspaceScope();memoSaveStatus.value='saving';
+  const payload={
     version: 1,
-    accountScope: workspaceScope(),
+    accountScope: scope,
     todos: todos.value.map((todo) => ({ ...todo, id: String(todo.id), updatedAt: todo.updatedAt || Date.now() })),
     memoText: memoText.value,
     updatedAt: Date.now()
-  });
+  };
+  memoSaveQueue=memoSaveQueue.catch(()=>{}).then(()=>saveFocusWorkspace(payload));
+  try{await memoSaveQueue;if(ticket===memoSaveTicket&&scope===workspaceScope())memoSaveStatus.value='saved';}
+  catch{if(ticket===memoSaveTicket&&scope===workspaceScope())memoSaveStatus.value='error';}
 }
 
 async function loadManualHistory() {
@@ -623,6 +641,7 @@ watch(accountScope, async () => {
 });
 
 onBeforeUnmount(() => {
+  ++memoLoadTicket;++memoSaveTicket;
   preserveImmersivePreference = Boolean(activeRecordId.value && immersive.value);
   window.clearInterval(timerHandle);
   window.removeEventListener("resize", updateScale);
@@ -1253,4 +1272,10 @@ onBeforeUnmount(() => {
 .focus-controls{flex:0 0 auto;align-self:center}
 @media(max-width:800px){.focus-stack{align-self:center}}
 @media(max-width:800px){.player__audio-group{flex-basis:100%;max-width:100%}}
+</style>
+
+<style scoped>
+/* Approved feedback37 memo: readable fixed-size glass, independent scrolling content. */
+.memo-panel{width:392px;padding:0;max-height:min(calc(100dvh - 64px),calc(100% - 32px));max-width:calc(100% - 32px);display:flex;flex-direction:column;overflow:hidden;--sr-glass-fill:rgba(27,42,36,.72);--sr-material-filter:blur(28px) saturate(125%);--sr-material-edge:rgba(237,244,232,.18);--sr-material-shadow:0 18px 60px #05100d36,inset 0 1px #ffffff05;background:var(--sr-glass-fill);border:1px solid var(--sr-material-edge);border-radius:25px;box-shadow:var(--sr-material-shadow)}
+.memo-head{padding:24px 24px 15px;flex:none;align-items:center}.memo-head small{font-size:10px;letter-spacing:.18em;color:#bbcabd}.memo-head h2{font-size:23px;margin-top:6px}.memo-head button{width:44px;height:44px;display:grid;place-items:center;padding:0;line-height:1;background:#e8f0df08}.memo-head button :deep(svg){display:block;width:18px;height:18px}.memo-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 24px 22px;font-size:11px;color:#b7c5bb}.memo-save{color:#c3d4ac;display:flex;align-items:center;gap:6px}.memo-save[role=alert]{color:#f0b8a7}.memo-save button{min-height:32px;border:1px solid #e1ebd82e;background:#ffffff0b;color:inherit;border-radius:8px}.memo-scroll{padding:0 24px 24px;overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#b5c9b54d transparent}.memo-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.memo-section-head h3{margin:0;font-size:14px}.memo-section-head>span{font-size:11px;color:#a6b5a9;font-variant-numeric:tabular-nums}.memo-note-head{margin-top:25px}.todo-form{grid-template-columns:minmax(0,1fr) 44px;gap:2px;border:1px solid #dbe7d526;background:#17221e44;border-radius:14px;padding:3px}.todo-form:focus-within{outline:2px solid var(--sr-color-accent);outline-offset:3px}.todo-form input{padding:10px;background:none;border:0;outline:none;min-height:44px;height:auto;font-size:12px}.todo-form button{width:44px;height:44px;border-radius:11px;background:#dae9af18;color:#d8e6ad;display:grid;place-items:center;padding:0}.todo-form button :deep(svg){width:18px;height:18px}.todo-list{gap:7px;margin-top:12px}.todo-list li{grid-template-columns:44px minmax(0,1fr) 44px;padding:5px;min-height:54px;border:1px solid #dce8d009;border-radius:12px;background:#cddbc408;font-size:13px;line-height:1.65}.todo-list li>span{min-width:0;overflow-wrap:anywhere}.todo-check,.todo-delete{position:relative;display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:none;padding:0}.todo-check:before{content:'';position:absolute;inset:10px;border:1px solid #d5e3ca52;border-radius:7px}.todo-check :deep(svg){width:14px;height:14px;position:relative}.todo-list li.done .todo-check{background:none;color:#314127}.todo-list li.done .todo-check:before{background:#d7e5b1}.todo-list li.done span{color:#a6b7a099}.todo-delete{color:#9aab9c}.todo-delete :deep(svg){width:16px;height:16px}.memo-empty{text-align:center;font-size:12px;line-height:1.8;color:#a6b5a9;padding:24px 4px}.memo-panel textarea{display:block;min-height:160px;max-height:280px;padding:14px;font-size:13px;line-height:1.85;border-color:#dbe7d526;background:#15221c38}.memo-privacy{font-size:11px;line-height:1.8;color:#a7b5ab;margin:11px 0 0}.memo-footer{padding:15px 24px;border-top:1px solid #e6f1dd23;display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#afc0ae;flex:none}.memo-footer>span:last-child{white-space:nowrap;color:#93a395}.memo-panel button:hover{background:#e8f0df15}.memo-panel button:focus-visible,.memo-panel textarea:focus-visible{outline:2px solid var(--sr-color-accent);outline-offset:3px}@media(max-width:800px){.memo-panel{width:calc(100% - 24px);right:12px}.memo-head{padding:20px 20px 15px}.memo-scroll{padding:0 20px 20px}.memo-meta{margin-left:20px;margin-right:20px}}
 </style>

@@ -14,5 +14,5 @@ export interface DesktopLyricsStyle {
   base?:string;fontFamily?:'system'|'sans'|'serif';opacity?:number;smoothScroll?:boolean;
 }
 export interface DesktopLyricWord {text:string;timeMs:number;endMs?:number}
-export interface DesktopLyricsFrame {title:string;line:string;nextLine:string;status:string;trackKey?:string;lineKey?:string;positionMs?:number;playing?:boolean;words?:DesktopLyricWord[];jump?:boolean}
+export interface DesktopLyricsFrame {title:string;line:string;nextLine:string;status:string;trackKey?:string;lineKey?:string;positionMs?:number;playing?:boolean;words?:DesktopLyricWord[];timingMode?:'word'|'estimated'|'static';jump?:boolean}
 export interface DesktopMusicState {settings:DesktopMusicSettings;error?:string}

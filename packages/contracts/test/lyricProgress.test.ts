@@ -1,0 +1,7 @@
+import {describe,it,expect} from 'vitest';
+import {lyricFill,lyricWordProgress} from '../src/lyricProgress';
+describe('shared lyric progression',()=>{
+  it('uses measured word timings and supplies only a known final boundary',()=>{const fill=lyricFill({text:'你好',timeMs:1000,words:[{text:'你',timeMs:1000,endMs:2000},{text:'好',timeMs:2000}]},4000);expect(fill.mode).toBe('word');expect(lyricWordProgress(fill.words![1]!,3000)).toBe(.5);});
+  it('estimates a line continuously with identical pause/seek inputs',()=>{const fill=lyricFill({text:'行',timeMs:2000},6000);expect(fill.mode).toBe('estimated');expect(lyricWordProgress(fill.words![0]!,3000)).toBe(.25);expect(lyricWordProgress(fill.words![0]!,1000)).toBe(0);expect(lyricWordProgress(fill.words![0]!,8000)).toBe(1);expect(lyricWordProgress(fill.words![0]!,3000)).toBe(.25);const split=lyricFill({text:'你好，风',timeMs:2000},6000);expect(split.words?.map(w=>w.text).join('')).toBe('你好，风');expect(split.words?.[2]?.timeMs).toBe(4000);});
+  it('does not invent an end, accept invalid values, or claim mismatching words are real timings',()=>{expect(lyricFill({text:'末句',timeMs:3000}).mode).toBe('static');expect(lyricFill({text:'末句',timeMs:3000},undefined,5000).words!.at(-1)!.endMs).toBe(5000);expect(lyricFill({text:'行',timeMs:NaN},5000).mode).toBe('static');expect(lyricFill({text:'行',timeMs:1000,words:[{text:'错',timeMs:1000,endMs:2000}]},3000).mode).toBe('estimated');});
+});

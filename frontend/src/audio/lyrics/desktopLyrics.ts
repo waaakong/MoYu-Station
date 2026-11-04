@@ -1,5 +1,6 @@
 import {reactive,watch} from 'vue';
 import type {DesktopMusicSettings,DesktopMusicState} from '@studyroom/contracts';
+import {lyricFill} from '@studyroom/contracts';
 import {usePlayerStore} from '../../stores/player';
 import {sharedLyricsState} from './sharedLyricsRuntime';
 export const desktopMusicState=reactive<{state:DesktopMusicState|null;error:string;busy:boolean}>({state:null,error:'',busy:false});
@@ -22,7 +23,8 @@ export function startDesktopLyrics(openSettings?:()=>void){
     const now=performance.now(),jump=trackKey!==lastTrack||Math.abs(positionMs-lastPosition)>1200||Math.abs(index-lastLine)>1;
     if(!force&&now-lastSentAt<100&&!jump&&lastStatus===player.playback.status&&lastLine===index)return;
     const current=state.lines[index],line=state.loading?'正在读取歌词…':state.error?'歌词读取失败':current?.text||(state.lines.length?'等待歌词开始':'暂无歌词');
-    const frame={title:track?.title||'墨屿 · 桌面歌词',line,nextLine:state.lines[index+1]?.text||'',status:player.buffering?'缓冲中':player.playback.status==='playing'?'播放中':player.playback.status==='paused'?'已暂停':'播放已停止',trackKey,lineKey:`${trackKey}:${index}`,positionMs,playing:player.playback.status==='playing'&&!player.buffering,words:current?.text===line?current?.words:undefined,jump};
+    const fill=lyricFill(current?.text===line?current:undefined,state.lines.slice(index+1).find(l=>l.timeMs>(current?.timeMs??Infinity))?.timeMs,player.playback.durationMs);
+    const frame={title:track?.title||'墨屿 · 桌面歌词',line,nextLine:state.lines[index+1]?.text||'',status:player.buffering?'缓冲中':player.playback.status==='playing'?'播放中':player.playback.status==='paused'?'已暂停':'播放已停止',trackKey,lineKey:`${trackKey}:${index}`,positionMs,playing:player.playback.status==='playing'&&!player.buffering,words:fill.words,timingMode:fill.mode,jump};
     const json=JSON.stringify(frame);if(json===lastFrame)return;lastFrame=json;lastSentAt=now;lastPosition=positionMs;lastLine=index;lastStatus=player.playback.status;lastTrack=trackKey;
     void bridge!.publishDesktopLyrics(frame).catch(()=>{if(disposed||lastFrame!==json)return;lastFrame='';desktopMusicState.error='桌面歌词未更新，请关闭浮窗后重试。';});
   }

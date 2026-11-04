@@ -14,6 +14,15 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class ProfileStatsSemanticsTest {
+  @Test void historicalCardIncludesSixMetricsWithoutBorrowingLaterDays(){
+    var daily=mock(DailyStatMapper.class);TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(),"card-history"),DailyStat.class);
+    var first=new DailyStat();first.setStatDate(LocalDate.of(2020,1,1));first.setFocusMinutes(60);
+    var second=new DailyStat();second.setStatDate(LocalDate.of(2020,1,2));second.setFocusMinutes(30);
+    var later=new DailyStat();later.setStatDate(LocalDate.of(2020,1,3));later.setFocusMinutes(120);
+    when(daily.selectList(any())).thenReturn(List.of(later,second,first));
+    var service=new ProfileService(mock(AuthService.class),mock(UserMapper.class),daily,mock(PostMapper.class),mock(FeedbackMapper.class),mock(ImageStorageService.class),mock(PasswordService.class));var user=new User();user.setId(1L);
+    var card=service.shareCard(user,"2020-01-02");assertThat(card.getFocusMinutes()).isEqualTo(30);assertThat(card.getStreakDays()).isEqualTo(2);assertThat(card.getTotalFocusHours()).isEqualByComparingTo("1.5");assertThat(card.getOnlineMinutes()).isNull();assertThat(card.getFishMinutes()).isNull();assertThat(card.getFakeEffortIndex()).isNull();
+  }
   @Test void missingStatisticsAndScenesAreNotInventedAndReportUsesShanghaiDate(){
     var daily=mock(DailyStatMapper.class);TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(),"stats"),DailyStat.class);
     when(daily.selectList(any())).thenReturn(List.of());

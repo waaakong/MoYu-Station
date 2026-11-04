@@ -13,3 +13,4 @@ export * from "./adminRecords";
 export * from './notifications';
 export * from './activity';
 export * from './desktopMusic';
+export * from './lyricProgress';

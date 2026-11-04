@@ -4,7 +4,7 @@
     <div class="card-date"><span>报告日期（北京时间）</span><StudyDatePicker v-model="selectedDate" min="2000-01-01" :max="today" @change="loadDate" /></div>
     <div class="study-card-body" :aria-busy="busy">
       <section aria-label="学习卡片预览"><canvas ref="canvas" role="img" aria-label="学习卡片图片预览" aria-describedby="study-card-transcript" width="1200" height="675" /><p>1200 × 675 · PNG · Asia/Shanghai · 背景：{{ backgroundName }}</p><p id="study-card-transcript">{{ transcript }}</p></section>
-      <section aria-label="导出内容设置"><fieldset :disabled="busy || !ready"><legend>卡片展示内容</legend><label><input v-model="options.focus" type="checkbox" />专注分钟</label><label><input v-model="options.fish" type="checkbox" />摸鱼分钟</label><label><input v-model="options.effort" type="checkbox" />假努力指数</label><small>可全部取消，仅影响本张卡片。</small></fieldset><p class="study-card-quote">{{ studyQuotes[quote] }}</p><button type="button" :disabled="busy || !ready" @click="quote=nextQuote(quote)">随机一句</button><p>未采集的指标显示“暂无”，不作为能力评价。</p></section>
+      <section aria-label="导出内容设置"><fieldset :disabled="busy || !ready"><legend>卡片展示内容</legend><label v-for="item in metricChoices" :key="item.key"><input v-model="options[item.key]" type="checkbox" />{{item.label}}</label><small>可全部取消，仅影响本张卡片。</small></fieldset><p class="study-card-quote">{{ studyQuotes[quote] }}</p><button type="button" :disabled="busy || !ready" @click="quote=nextQuote(quote)">随机一句</button><p>未采集的指标显示“暂无”，不作为能力评价。</p></section>
     </div>
     <footer><p :role="failed?'alert':'status'">{{ status }}</p><div><button type="button" @click="busy?cancel():close()">{{ busy?'取消生成':'返回统计' }}</button><button type="button" :disabled="busy" @click="ready?save():prepare()">{{ busy?'生成中…':failed?'重试生成 PNG':'保存 PNG' }}</button></div></footer>
   </dialog>
@@ -17,10 +17,11 @@ import StudyDatePicker from './StudyDatePicker.vue';
 import {scenes} from '../../data/scenes';
 import {fetchShareCard,type ShareCard} from '../../services/profile';
 import {studyQuotes,nextQuote,studyCardSnapshot,cardTranscript,paintStudyCard,type StudyCard} from '../../profile/studyCard';
-const props=defineProps<{report:ShareCard}>(),auth=useAuthStore();
+const props=defineProps<{report:ShareCard;todaySnapshot?:()=>ShareCard|null}>(),auth=useAuthStore();
 const selectedDate=ref(''),today=ref('');
 const dialog=ref<HTMLDialogElement>(),canvas=ref<HTMLCanvasElement>(),ready=ref(false),busy=ref(false),failed=ref(false),status=ref(''),backgroundName=ref('');
-const options=reactive({focus:true,fish:true,effort:true}),quote=ref(Math.floor(Math.random()*studyQuotes.length));
+const options=reactive({focus:true,fish:true,effort:true,online:true,streak:true,total:true}),quote=ref(Math.floor(Math.random()*studyQuotes.length));
+const metricChoices=[{key:'focus',label:'专注分钟'},{key:'streak',label:'连续专注'},{key:'total',label:'累计专注'},{key:'online',label:'今日在线'},{key:'fish',label:'摸鱼分钟'},{key:'effort',label:'假努力指数'}] as const;
 const snapshot=ref<StudyCard|null>(null),transcript=computed(()=>snapshot.value?cardTranscript(snapshot.value):'正在准备预览');
 let generation=0,image:HTMLImageElement|null=null,loadAbort:AbortController|null=null;
 let openedReport:ShareCard|null=null,openedNickname='',openedOwner:unknown=null,openedSession=-1,background='';
@@ -54,7 +55,8 @@ async function loadDate(){
     const date=selectedDate.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today.value||date<'2000-01-01')throw new Error('date');
     const report=await fetchShareCard(date);if(!current(ticket))return;
     if(report.statDate!==date||report.timeZone!=='Asia/Shanghai')throw new Error('date');
-    openedReport={...report};
+    const displayed=date===today.value?props.todaySnapshot?.():null;
+    openedReport={...report,...(displayed?.statDate===date&&displayed.timeZone==='Asia/Shanghai'?displayed:{})};
     const historical=scenes.find(item=>item.name===report.favoriteScene),selected=historical||scenes[0]!;
     background=selected.images.morning;backgroundName.value=historical?`${selected.name}（装饰背景）`:'默认装饰背景，非历史场景记录';
     busy.value=false;await prepare();
@@ -73,7 +75,7 @@ async function save(){
   finally{clearTimeout(timer);if(current(ticket))busy.value=false;}
 }
 watch([options,quote],()=>{if(!busy.value&&dialog.value?.open)try{draw();}catch{ready.value=false;failed.value=true;status.value='预览失败，请重试。';}});
-watch(()=>auth.sessionGeneration,()=>{closeMotionDialog(dialog.value,true);release();options.focus=options.fish=options.effort=true;quote.value=Math.floor(Math.random()*studyQuotes.length);});
+watch(()=>auth.sessionGeneration,()=>{closeMotionDialog(dialog.value,true);release();for(const item of metricChoices)options[item.key]=true;quote.value=Math.floor(Math.random()*studyQuotes.length);});
 onBeforeUnmount(()=>{closeMotionDialog(dialog.value,true);release();});defineExpose({open});
 </script>
 <style scoped>

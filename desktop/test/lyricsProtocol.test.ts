@@ -12,6 +12,8 @@ describe('desktop lyric trust boundary',()=>{
     for(const style of [{fontSize:1000,highlight:'#ffffff',rows:2},{fontSize:38,highlight:'red;position:fixed',rows:2},{fontSize:38,highlight:'#ffffff',rows:3}])expect(desktopMusicSettingsSchema.safeParse({...DEFAULT_DESKTOP_MUSIC,lyricsStyle:style}).success).toBe(false);
   });
   it('rejects reversed or mismatched timings and oversized frames',()=>{
+    expect(lyricsFrameSchema.safeParse({...base,timingMode:'estimated'}).success).toBe(true);
+    expect(lyricsFrameSchema.safeParse({...base,timingMode:'pretend-real'}).success).toBe(false);
     for(const words of [[{text:'你好',timeMs:2000,endMs:1000}],[{text:'其他歌词',timeMs:1000}],[{text:'你',timeMs:2000},{text:'好',timeMs:1000}]])expect(lyricsFrameSchema.safeParse({...base,words}).success).toBe(false);
     expect(lyricsFrameSchema.safeParse({...base,line:'a'.repeat(2001)}).success).toBe(false);
     expect(lyricsFrameSchema.safeParse({...base,words:[{text:'你',timeMs:1000,endMs:2000},{text:'好',timeMs:2000}]}).success).toBe(true);

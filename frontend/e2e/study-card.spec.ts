@@ -8,13 +8,16 @@ async function setup(page:Page){
     const path=new URL(route.request().url()).pathname;let data:unknown=[];
     if(path.endsWith('/auth/me')||path.endsWith('/profile/me'))data={id:2,username:'fixture',nickname:'山间读者',userType:'NORMAL'};
     else if(path.endsWith('/profile/stats'))data={todayFocusMinutes:35,totalFocusHours:2,fishMinutes:0,favoriteScene:'高山湖泊'};
-    else if(path.endsWith('/profile/share-card'))data={title:'今日学习报告',statDate:new URL(route.request().url()).searchParams.get('date')||'2026-09-28',timeZone:'Asia/Shanghai',focusMinutes:35,fishMinutes:0,fakeEffortIndex:1.5,favoriteScene:'高山湖泊'};
+    else if(path.endsWith('/profile/share-card'))data={title:'今日学习报告',statDate:new URL(route.request().url()).searchParams.get('date')||'2026-09-28',timeZone:'Asia/Shanghai',focusMinutes:35,onlineMinutes:100,streakDays:3,totalFocusHours:12.5,fishMinutes:0,fakeEffortIndex:1.5,favoriteScene:'高山湖泊'};
     await route.fulfill({json:{success:true,data}});
   });
   await page.goto('/profile?module=stats');await page.getByRole('button',{name:'预览学习卡片'}).click();await expect(page.getByRole('status')).toContainText('预览与 PNG 内容一致');
 }
-test('eight metric combinations export actual PNG bytes identical to the visible canvas',async({page},info)=>{
+test('six default metrics and metric combinations export actual PNG bytes identical to the visible canvas',async({page},info)=>{
   await setup(page);const dialog=page.getByRole('dialog',{name:'学习卡片'});
+  for(const name of ['专注分钟','连续专注','累计专注','今日在线','摸鱼分钟','假努力指数'])await expect(dialog.getByRole('checkbox',{name,exact:true})).toBeChecked();
+  await expect(dialog.locator('#study-card-transcript')).toContainText('100 分钟');await expect(dialog.locator('#study-card-transcript')).toContainText('12.5 小时');await expect(dialog.locator('#study-card-transcript')).toContainText('3 天');
+  await page.locator('canvas[aria-label="学习卡片图片预览"]').screenshot({path:info.outputPath('card-six-metrics.png')});
   for(let mask=0;mask<8;mask++){
     for(const [bit,name] of [[1,'专注分钟'],[2,'摸鱼分钟'],[4,'假努力指数']] as const)await dialog.getByRole('checkbox',{name,exact:true}).setChecked(!!(mask&bit));
     const encoded=await page.locator('canvas[aria-label="学习卡片图片预览"]').evaluate((canvas:HTMLCanvasElement)=>canvas.toDataURL('image/png').split(',')[1]);

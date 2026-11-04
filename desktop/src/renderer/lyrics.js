@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id),reduced=matchMedia('(prefers-reduced-motion: reduce)');
-let frame=null,received=0,key='',track='',inks=[],animations=[],outgoing=null,raf=0;
+let frame=null,received=0,key='',track='',wordKey='',inks=[],animations=[],outgoing=null,raf=0;
 function stopMotion(){animations.forEach(a=>a.cancel());animations=[];outgoing?.remove();outgoing=null;}
 function notice(text){$('status').textContent=text;$('status').hidden=!text;}
 function paintWords(){
@@ -10,7 +10,7 @@ function paintWords(){
   if(frame.playing&&inks.length&&!document.hidden&&!reduced.matches)raf=requestAnimationFrame(paintWords);
 }
 window.moyuLyrics.onFrame(value=>{
-  const changed=(value.lineKey||value.line)!==key||value.line!==frame?.line,canSlide=changed&&track===value.trackKey&&!!key&&!value.jump&&value.playing&&value.style?.smoothScroll!==false&&!reduced.matches;
+  const lineChanged=(value.lineKey||value.line)!==key||value.line!==frame?.line,signature=JSON.stringify([value.words,value.timingMode]),changed=lineChanged||signature!==wordKey,canSlide=lineChanged&&track===value.trackKey&&!!key&&!value.jump&&value.playing&&value.style?.smoothScroll!==false&&!reduced.matches;
   if(changed){
     stopMotion();const old=canSlide?$('line').cloneNode(true):null;$('line').replaceChildren();inks=[];
     if(value.words?.length){for(const word of value.words){const span=document.createElement('span');span.className='word';span.append(document.createTextNode(word.text));const ink=document.createElement('span');ink.className='ink';ink.textContent=word.text;ink.setAttribute('aria-hidden','true');span.append(ink);$('line').append(span);inks.push(ink);}}
@@ -21,7 +21,9 @@ window.moyuLyrics.onFrame(value=>{
       animations=[exit,$('line').animate([{transform:`translateY(${height}px) scale(.77)`,opacity:.65},{transform:'translateY(0) scale(1)',opacity:1}],options),$('next').animate([{transform:`translateY(${height}px) scale(.77)`,opacity:0},{transform:'translateY(0) scale(.77)',opacity:1}],options)];
     }
   }else if(value.jump)stopMotion();
-  key=value.lineKey||value.line;track=value.trackKey;frame=value;received=performance.now();
+  key=value.lineKey||value.line;wordKey=signature;track=value.trackKey;frame=value;received=performance.now();
+  $('viewport').setAttribute('aria-label',value.timingMode==='estimated'?'歌词按句内进度估算覆盖':value.timingMode==='word'?'歌词按逐字时间覆盖':'歌词静态高亮');
+  $('surface').title=value.timingMode==='estimated'?'按句内进度估算，非原始逐字时间':'';
   $('title').textContent=value.title;document.body.classList.toggle('locked',value.locked);$('play').setAttribute('aria-label',value.playing?'暂停':'播放');$('play').title=value.playing?'暂停':'播放';$('play').querySelector('path').setAttribute('d',value.playing?'M6 4h4v16H6ZM14 4h4v16h-4Z':'M7 4v16l13-8Z');
   notice(['播放中','已暂停','播放已停止','缓冲中',''].includes(value.status)?'':value.status);
   if(value.style){document.body.style.setProperty('--font-size',value.style.fontSize+'px');document.body.style.setProperty('--highlight',value.style.highlight);document.body.style.setProperty('--base',value.style.base||'#aab7a3');document.body.style.setProperty('--lyric-opacity',String(value.style.opacity??.85));document.body.style.fontFamily=value.style.fontFamily==='serif'?'SimSun,serif':value.style.fontFamily==='sans'?'Microsoft YaHei,sans-serif':'Microsoft YaHei,Segoe UI,sans-serif';$('next').hidden=value.style.rows===1;}

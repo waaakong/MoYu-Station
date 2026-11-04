@@ -5,7 +5,7 @@ const script=readFileSync(new URL('../src/renderer/lyrics.js',import.meta.url),'
 describe('transparent lyrics renderer',()=>{
  it('initializes without old appearance controls and applies actual frame appearance without replacing toolbar icons',()=>{
   const nodes=new Map<string,any>();const make=()=>({style:{setProperty:vi.fn()},setAttribute:vi.fn(),querySelector:()=>({setAttribute:vi.fn()}),replaceChildren:vi.fn(),addEventListener:vi.fn(),classList:{toggle:vi.fn()},hidden:false,textContent:'',title:''});
-  for(const id of ['line','next','title','play','status','viewport'])nodes.set(id,make());
+  for(const id of ['line','next','title','play','status','viewport','surface'])nodes.set(id,make());
   let receive!:(frame:any)=>void;
   const document={getElementById:(id:string)=>nodes.get(id),querySelectorAll:()=>[],body:{style:{setProperty:vi.fn()},classList:{toggle:vi.fn()}},hidden:false,addEventListener:vi.fn()};
   runInNewContext(script,{document,window:{moyuLyrics:{onFrame:(cb:any)=>receive=cb}},matchMedia:()=>({matches:false,addEventListener:vi.fn()}),performance:{now:()=>1000},requestAnimationFrame:vi.fn(),cancelAnimationFrame:vi.fn()});
