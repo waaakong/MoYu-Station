@@ -107,8 +107,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes mysql-server-core-8.0
           test -x /usr/sbin/mysqld
-      - name: Verify real policy row locks, commits, rollback and notifications
-        run: mvn --batch-mode -Dtest=ClientReleaseMysqlIT,ActivityLedgerMysqlIT -Dmedia.mysql.binary=/usr/sbin/mysqld test
+      - name: Verify policy transactions, activity and historical card HTTP isolation
+        run: mvn --batch-mode -Dtest=ClientReleaseMysqlIT,ActivityLedgerMysqlIT,ProfileCardHttpMysqlIT -Dmedia.mysql.binary=/usr/sbin/mysqld test
 
   deployment:
     name: Phase 12 deployment gates

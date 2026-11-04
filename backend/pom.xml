@@ -181,6 +181,7 @@
                     <include>**/StickerFavoriteMysqlIT.java</include>
                     <include>**/FeedTimelineMysqlIT.java</include>
                     <include>**/CustomSceneMysqlIT.java</include>
+                    <include>**/ProfileCardHttpMysqlIT.java</include>
                   </includes>
                   <reportsDirectory>${project.build.directory}/surefire-reports/media-mysql</reportsDirectory>
                   <systemPropertyVariables>
