@@ -70,6 +70,7 @@ test('a late failed lyric request cannot clear a newly selected track; failure e
   await expect(page.locator('.stage-lyrics__lines .is-current')).toHaveText('当前第三秒');
   await page.getByRole('button',{name:'视觉设置',exact:true}).click();
   await page.getByRole('button', { name: '歌词延后半秒' }).click();
-  await expect(page.getByRole('button', { name: '+0.5s', exact: true })).toBeVisible();
+  const offset=page.getByRole('button', { name: '重置歌词偏移', exact: true });
+  await expect(offset).toBeVisible();await expect(offset).toHaveText('+0.5s');
   await page.evaluate(() => { (window as any).stopSyntheticLyrics(); delete (window as any).studyRoomDesktop; });
 });
