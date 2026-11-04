@@ -34,9 +34,13 @@ test('native wheel renders approved translucent sectors and handles fresh, stale
   await send(3,0,Array(8).fill('next'));await expect(page.locator('#wheel')).toHaveAttribute('data-sequence','2');
   await send(3,-1);await expect(page.locator('#center strong')).toHaveText('移向操作');
   await page.screenshot({path:info.outputPath('native-wheel-gradient.png'),omitBackground:true});
-  await page.emulateMedia({reducedMotion:'no-preference'});await send(4,2);
-  expect(await page.evaluate(()=>(window as any).gsap.getTweensOf(document.querySelector('#wheel')).length)).toBe(1);
-  await page.evaluate(()=>{(window as any).gsap.getTweensOf(document.querySelector('#wheel'))[0].totalProgress(1);});
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  const openedTweens=await page.evaluate(frame=>{
+    (window as any).wheelFrame(frame);
+    const tweens=(window as any).gsap.getTweensOf(document.querySelector('#wheel'));
+    const count=tweens.length;tweens[0]?.totalProgress(1);return count;
+  },{sequence:4,selected:2,slots});
+  expect(openedTweens).toBe(1);
   await send(4,3);
   expect(await page.evaluate(()=>(window as any).gsap.getTweensOf(document.querySelector('#wheel')).length)).toBe(0);
   await page.emulateMedia({reducedMotion:'reduce'});await send(5,-1);

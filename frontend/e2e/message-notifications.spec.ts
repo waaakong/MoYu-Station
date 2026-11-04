@@ -227,7 +227,9 @@ test('a multi-conversation summary opens the mobile conversation list, not the o
   });
   await emit(page, 'PRIVATE_MESSAGE_RECEIVE', { ...incoming('601'), senderId: '5' });
   // Return to a non-chat route so both conversations remain eligible for a summary.
-  await page.evaluate(async () => { const path = '/src/router/index.js'; await (await import(path)).default.push('/scene'); });
+  await page.getByRole('link',{name:'空间',exact:true}).click();
+  await expect(page).toHaveURL(/\/scene$/);
+  await expect(page.getByRole('heading',{name:'先选一扇窗 再开始专注'})).toBeVisible();
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.locator('.message-notice-open')).toContainText('5 条未读私信');
   await page.locator('.message-notice-open').click(); await expect(page).toHaveURL(/unread=1/);

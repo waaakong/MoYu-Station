@@ -48,6 +48,7 @@ test("administrator profile exposes management without horizontal overflow", asy
     await route.fulfill({ status: 200, contentType: "application/json", body: ok(data) });
   });
   await page.goto("/profile");
+  await expect(page.getByRole('complementary',{name:'个人中心模块'})).toContainText('管理员');
   await page.getByRole('button', { name: '账号菜单' }).click();
   await expect(page.getByRole("link", { name: "管理", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
