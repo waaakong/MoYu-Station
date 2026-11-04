@@ -53,6 +53,26 @@ test('account popup paints and receives input above the contextual glass control
   }
 });
 
+test('initial lazy route completion preserves an already opened account menu',async({page})=>{
+  let releasePage!:()=>void;
+  const heldPage=new Promise<void>(resolve=>{releasePage=resolve;});
+  await page.route('**/src/pages/SceneSelectPage.vue*',async route=>{await heldPage;await route.continue();});
+  try{
+    await page.goto('/scene',{waitUntil:'domcontentloaded'});
+    const trigger=page.getByRole('button',{name:'账号菜单'});
+    await trigger.click();
+    await expect(page.getByRole('link',{name:'个人空间',exact:true})).toBeFocused();
+    releasePage();
+    await expect(page.getByRole('heading',{name:/先选一扇窗/})).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-expanded','true');
+    await expect(page.getByRole('link',{name:'个人空间',exact:true})).toBeFocused();
+    await page.getByRole('link',{name:'声音',exact:true}).click();
+    await expect(page).toHaveURL(/\/sound$/);
+    await expect(trigger).toHaveAttribute('aria-expanded','false');
+    await expect(page.locator('#account-panel')).toHaveCount(0);
+  }finally{releasePage();}
+});
+
 test('glass select host and trigger share rounded corners without clipping its popup',async({page})=>{
   await page.goto('/entertainment');await page.getByRole('button',{name:/风景拼图/}).click();
   const select=page.getByRole('combobox',{name:'难度'});

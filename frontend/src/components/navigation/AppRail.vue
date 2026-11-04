@@ -32,7 +32,7 @@
 </template>
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { featureFlags } from '../../config/features';
 import { useAuthStore } from '../../stores/auth';
 import { contextNavigation, navigationGroup } from './navigation';
@@ -43,6 +43,7 @@ const isDesktop = Boolean(window.studyRoomDesktop);
 defineProps<{ drawerOpen: boolean }>();
 const emit = defineEmits<{ (event: 'open-drawer', sourceEvent: MouseEvent): void }>();
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const group = computed(() => navigationGroup(route.name));
 const primaryItems = computed(() => [
@@ -82,9 +83,13 @@ watch(accountOpen, open => {
     document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keyboard); document.removeEventListener('focusin', focusOutside);
   }
 });
-watch(() => route.fullPath, () => closeAccount(false));
+// Initial lazy-route resolution is not a user navigation. The rail can already
+// be interactive while that route loads; keep its open menu and focus intact.
+const removeNavigation = router.afterEach((to, from, failure) => {
+  if (!failure && from.matched.length && to.fullPath !== from.fullPath) closeAccount(false);
+});
 function openAppearance(event: MouseEvent) { emit('open-drawer', event); closeAccount(false); }
-onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keyboard); document.removeEventListener('focusin', focusOutside); });
+onBeforeUnmount(() => { removeNavigation(); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keyboard); document.removeEventListener('focusin', focusOutside); });
 defineExpose({ focusAppearance: () => (appearanceButton.value || accountButton.value)?.focus() });
 </script>
 <style scoped>
