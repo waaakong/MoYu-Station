@@ -6,6 +6,14 @@
 
 [进入网页版](https://8.163.29.26/scene) · [下载与更新日志](https://8.163.29.26/download) · [GitHub Releases](https://github.com/waaakong/MoYu-Station/releases) · [开发者文档](docs/development/README.md)
 
+## 一分钟认识墨屿
+
+[![墨屿产品短片：窗景、专注、音乐与桌面体验](docs/media/moyu-station-product-film-20261116.jpg)](https://github.com/waaakong/MoYu-Station/raw/refs/heads/main/docs/media/moyu-station-product-film-20261116.mp4)
+
+[观看／下载有声短片 · 60秒 · 1080p](https://github.com/waaakong/MoYu-Station/raw/refs/heads/main/docs/media/moyu-station-product-film-20261116.mp4)
+
+以 Three.js 编排窗景、专注、音乐舞台、桌面轮盘与学习统计，配有原创合成音乐和音效。画面为概念演示，使用演示界面与数据，不是实机录屏；具体功能以实际版本为准。[媒体说明与校验值](docs/media/README.md)。
+
 ## 可以做什么
 
 - **选择窗景**：内置场景与七个光影时段，支持私人自定义场景；云端功能需登录。
